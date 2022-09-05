@@ -367,7 +367,7 @@ def populate_datatable(n_intervals):
             style_table={'height': '300px', 'overflowY': 'auto'},
             style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
             page_size=15,
-            export_format='xlsx'
+            # export_format='xlsx'
 
         ),
     ]

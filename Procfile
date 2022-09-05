@@ -1,0 +1,1 @@
+web: gunicorn medicaii_app:server

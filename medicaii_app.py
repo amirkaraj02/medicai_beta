@@ -38,7 +38,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 # app requires "pip install psycopg2" as well
 
 dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
-PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
+# PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
+PLOTLY_LOGO = "/assets/mylogo.jpg"
 
 server = Flask(__name__)
 app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True,
@@ -46,6 +47,9 @@ app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True,
 server = app.server
 
 app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
+
+app.title = "MEDIC-AI"
+app._favicon = '/assets/favicon.ico'
 
 # connection string for local PostgresSQL test table
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:amir02@localhost/medicAI_app_test"
@@ -79,7 +83,7 @@ navbar = dbc.Navbar(
             # Use row and col to control vertical alignment of logo / brand
             dbc.Row(
                 [
-                    dbc.Col(html.Img(src=PLOTLY_LOGO, height="30px")),
+                    dbc.Col(html.Img(src=PLOTLY_LOGO, height="60px", width="60px")),
                     dbc.Col(dbc.NavbarBrand("MEDIC-AI Karar Destek Sistemi", className="ms-2")),
                 ],
                 align="center",

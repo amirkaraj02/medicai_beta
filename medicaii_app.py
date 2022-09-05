@@ -51,7 +51,9 @@ app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:amir02@localhost/medicAI_app_test"
 
 # connection string for live database on heroku
-app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://tctazcptsemgbx:f5571aba7ec0ee16ba3daa04037580d825844d2a0bdade4224fe3295dfd4d7c5@ec2-54-228-32-29.eu-west-1.compute.amazonaws.com:5432/db8f6qmenvsgf2"
+# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://tctazcptsemgbx:f5571aba7ec0ee16ba3daa04037580d825844d2a0bdade4224fe3295dfd4d7c5@ec2-54-228-32-29.eu-west-1.compute.amazonaws.com:5432/db8f6qmenvsgf2"
+app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
+# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
 db = SQLAlchemy(app.server)
 
 # ---------------------------------------------------------------------------------
@@ -551,8 +553,14 @@ def update_dd_value(data):
 )
 def ml_train_display(data, x_ml, y_ml, model_name):
     dff = pd.DataFrame(data)
-    x_val = dff[x_ml].values[:, None]
-    target_data = dff[y_ml]
+
+    #converting datas from object to numeric
+    convert_df = dff._convert(numeric=True)
+
+    num_data = convert_df._get_numeric_data()
+
+    x_val = convert_df[x_ml].values[:, None]
+    target_data = convert_df[y_ml]
 
     # convert y values to categorical values
     lab = preprocessing.LabelEncoder()
@@ -608,7 +616,9 @@ def update_y_dd_value(data):
     prevent_initial_call=True)
 def update_dd_value(data):
     df_multi = pd.DataFrame(data)
-    return [{"label": i, "value": i} for i in df_multi.columns]
+    convert_df_x_cluster = df_multi._convert(numeric=True)
+    df_x_cluster_num = convert_df_x_cluster._get_numeric_data()
+    return [{"label": i, "value": i} for i in df_x_cluster_num.columns]
 
 
 @app.callback(
@@ -617,7 +627,9 @@ def update_dd_value(data):
     prevent_initial_call=True)
 def update_dd_value(data):
     df_multi = pd.DataFrame(data)
-    return [{"label": i, "value": i} for i in df_multi.columns]
+    convert_df_y_cluster = df_multi._convert(numeric=True)
+    df_y_cluster_num = convert_df_y_cluster._get_numeric_data()
+    return [{"label": i, "value": i} for i in df_y_cluster_num.columns]
 
 
 @app.callback(
@@ -632,8 +644,11 @@ def update_dd_value(data):
 )
 def make_graph(x, y, n_clusters, data):
     dff = pd.DataFrame(data)
+
+    #converting datatype from object to numeric
     convert_df = dff._convert(numeric=True)
-    num_data = dff._get_numeric_data()
+    num_data = convert_df._get_numeric_data()
+
     # minimal input validation, make sure there's at least one cluster
     km = KMeans(n_clusters=max(n_clusters, 1))
     df_dff = num_data.loc[:, [x, y]]

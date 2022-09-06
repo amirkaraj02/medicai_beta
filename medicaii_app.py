@@ -56,7 +56,8 @@ app._favicon = '/assets/favicon.ico'
 
 # connection string for live database on heroku
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://tctazcptsemgbx:f5571aba7ec0ee16ba3daa04037580d825844d2a0bdade4224fe3295dfd4d7c5@ec2-54-228-32-29.eu-west-1.compute.amazonaws.com:5432/db8f6qmenvsgf2"
-app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
+app.server.config[
+    "SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
 db = SQLAlchemy(app.server)
 
@@ -130,7 +131,7 @@ app.layout = html.Div([
                     #
                     html.Br(),
                     html.Button('Orneklem Ekle', id='editing-rows-button', n_clicks=0),
-                    html.Button('Save to PostgreSQL', id='save_to_postgres', n_clicks=0, style={"margin-left": "20px"}),
+                    html.Button('Kaydet', id='save_to_postgres', n_clicks=0, style={"margin-left": "20px"}),
 
                     # Create notification when saving to database
                     html.Div(id='placeholder', children=[]),
@@ -431,10 +432,7 @@ def df_to_db(n_clicks, n_intervals, dataset, s):
         s = 6
         pg = pd.DataFrame(dataset)
         # print("to_db ", pg.dtypes)
-        pg.to_sql("hastaveri", con=db.engine,
-                  if_exists='replace',
-                  index=False,
-                  )
+        pg.to_sql('hastaveri', con=db.engine, if_exists='replace', index=False)
         return output, s
     elif input_triggered == 'interval' and s > 0:
         s = s - 1
@@ -558,7 +556,7 @@ def update_dd_value(data):
 def ml_train_display(data, x_ml, y_ml, model_name):
     dff = pd.DataFrame(data)
 
-    #converting datas from object to numeric
+    # converting datas from object to numeric
     convert_df = dff._convert(numeric=True)
 
     num_data = convert_df._get_numeric_data()
@@ -649,7 +647,7 @@ def update_dd_value(data):
 def make_graph(x, y, n_clusters, data):
     dff = pd.DataFrame(data)
 
-    #converting datatype from object to numeric
+    # converting datatype from object to numeric
     convert_df = dff._convert(numeric=True)
     num_data = convert_df._get_numeric_data()
 
@@ -702,7 +700,10 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
     convert_df = dff._convert(numeric=True)
     numeric_data = convert_df.select_dtypes(include=np.number)
     del numeric_data['OUTPUT']
-    targetData = convert_df['OUTPUT']
+    targetData = np.nan_to_num(convert_df['OUTPUT'])
+
+    # targetData= np.nan_to_num(targetData)
+
 
     # reset button click state
     changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
@@ -727,7 +728,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
         dff_sel_row = pd.DataFrame(sel_row)
-        convert_df = dff_sel_row._convert(numeric=True)
+        dff_sel_non_nan = dff_sel_row.fillna(0)
+        convert_df = dff_sel_non_nan._convert(numeric=True)
         new_numeric_data = convert_df.select_dtypes(include=np.number)
         del new_numeric_data['OUTPUT']
 
@@ -735,6 +737,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         SVMprediction = svcclassifier.predict(SVMnewTestData)
+        print("prediction: ", SVMprediction)
 
         # Yeni datanin tahmini sonuclandirmak
         if (SVMprediction[:] == 1):
@@ -743,6 +746,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
             return "LungCancer"
         elif (SVMprediction[:] == 6):
             return "Normal"
+        else:
+            return "NaN"
 
         # return algthPredict
 
@@ -765,9 +770,13 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
         dff_sel_row = pd.DataFrame(sel_row)
-        convert_df = dff_sel_row._convert(numeric=True)
+        dff_sel_non_nan = dff_sel_row.fillna(0)
+        convert_df = dff_sel_non_nan._convert(numeric=True)
         new_numeric_data = convert_df.select_dtypes(include=np.number)
+        print("before:", new_numeric_data)
         del new_numeric_data['OUTPUT']
+
+        print("after output del: ",new_numeric_data)
 
         # LinReg_newTestData = reg.transform(new_numeric_data)
 
@@ -782,6 +791,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
             return "LungCancer"
         elif (LinReg_prediction[:] == 6 or LinReg_prediction[:] >= 6 or LinReg_prediction[:] <= 6.5):
             return "Normal"
+        else:
+            return "NaN"
 
 
     elif (ml_selection == 'k-NN' and 'ml_pred_start' in changed_id):
@@ -807,7 +818,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
         dff_sel_row = pd.DataFrame(sel_row)
-        convert_df = dff_sel_row._convert(numeric=True)
+        dff_sel_non_nan = dff_sel_row.fillna(0)
+        convert_df = dff_sel_non_nan._convert(numeric=True)
         new_numeric_data = convert_df.select_dtypes(include=np.number)
         del new_numeric_data['OUTPUT']
 
@@ -823,6 +835,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
             return "LungCancer"
         elif (knn_prediction[:] == 6):
             return "Normal"
+        else:
+            return  "NaN"
 
     elif (ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id):
 
@@ -831,8 +845,12 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         scaler = StandardScaler()
         scaler.fit(knn_numeric_data_train)
 
-        SVMnumeric_data_train = scaler.transform(knn_numeric_data_train)
-        SVMnumeric_data_test = scaler.transform(knn_numeric_data_test)
+        knn_numeric_data_train = scaler.transform(knn_numeric_data_train)
+        knn_numeric_data_test = scaler.transform(knn_numeric_data_test)
+
+        # print(knn_numeric_data_train)
+        # print(knn_numeric_data_test)
+
 
         d_tree_classifier = DecisionTreeClassifier(criterion='entropy', random_state=0)
         # d_tree_classifier = DecisionTreeClassifier(class_weight=None, criterion='entropy', max_depth=None,
@@ -842,9 +860,9 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         #                                            min_weight_fraction_leaf=0.0, presort=False,
         #                                            random_state=0, splitter='best')
 
-        d_tree_classifier.fit(SVMnumeric_data_train, knn_target_data_train)
+        d_tree_classifier.fit(knn_numeric_data_train, knn_target_data_train)
 
-        algthPredict = d_tree_classifier.predict(SVMnumeric_data_test)
+        algthPredict = d_tree_classifier.predict(knn_numeric_data_test)
 
         # print(confusion_matrix(SVMtarget_data_test, algthPredict))
         #
@@ -853,10 +871,10 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
         dff_sel_row = pd.DataFrame(sel_row)
-        convert_df = dff_sel_row._convert(numeric=True)
+        dff_sel_non_nan = dff_sel_row.fillna(0)
+        convert_df = dff_sel_non_nan._convert(numeric=True)
         new_numeric_data = convert_df.select_dtypes(include=np.number)
         del new_numeric_data['OUTPUT']
-        print(new_numeric_data)
 
         knn_newTestData = scaler.transform(new_numeric_data)
 
@@ -870,6 +888,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
             return "LungCancer"
         elif (knn_prediction[:] == 6):
             return "Normal"
+        else:
+            return "NaN"
 
 
 if __name__ == '__main__':

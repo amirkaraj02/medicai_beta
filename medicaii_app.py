@@ -4,12 +4,12 @@ from dash import dash_table, dcc, html
 import dash_bootstrap_components as dbc
 import datetime
 from dash_bootstrap_components._components.Container import Container
+import dash_auth
 
 # pandas and plotly library
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
 import numpy as np
 from plotly.subplots import make_subplots
 
@@ -51,6 +51,11 @@ app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.title = "MEDIC-AI"
 app._favicon = '/assets/favicon.ico'
 
+auth = dash_auth.BasicAuth(
+    app,
+    {'marmara': 'demo'}
+)
+
 # connection string for local PostgresSQL test table
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:amir02@localhost/medicAI_app_test"
 
@@ -69,7 +74,9 @@ predict_models = {'Logistic Regression': linear_model.LogisticRegression,
                   'k-NN': neighbors.KNeighborsClassifier,
                   'Linear Regression': linear_model.LinearRegression,
                   'Naive Bayes': naive_bayes.GaussianNB,
-                  'SVM': svm.SVC}
+                  'SVM': svm.SVC,
+                  'ANN': neural_network.MLPClassifier
+                  }
 
 # roc_models = {'Regression': linear_model.LinearRegression,
 #               'Decision Tree': tree.DecisionTreeRegressor,
@@ -121,8 +128,8 @@ app.layout = html.Div([
                         value='',
                         style={"display": "inline-block", "left": "10px", "width": "150px"}
                     ),
-                    html.Button('Ozellik Ekle', id='adding-columns-button', n_clicks=0,
-                                style={"display": "inline-block", "margin-left": "20px"}),
+                    dbc.Button('Ozellik Ekle', id='adding-columns-button', n_clicks=0,
+                               style={"display": "inline-block", "margin-left": "20px"}),
                     dcc.Interval(id='interval_pg', interval=86400000 * 7, n_intervals=0),
                     # activated once/week or when page refreshed
                     html.Br(),
@@ -130,13 +137,23 @@ app.layout = html.Div([
                     html.Div(id='postgres_datatable'),
                     #
                     html.Br(),
-                    html.Button('Orneklem Ekle', id='editing-rows-button', n_clicks=0),
-                    html.Button('Kaydet', id='save_to_postgres', n_clicks=0, style={"margin-left": "20px"}),
+                    dbc.Button('Orneklem Ekle', id='editing-rows-button', n_clicks=0),
+                    dbc.Button('Kaydet', id='save_to_postgres', color="success", n_clicks=0,
+                               style={"margin-left": "20px"}),
+
+                    dbc.Button('Veri Icerigi', id='data_details', color="info", style={"margin-left": "20px"}),
 
                     # Create notification when saving to database
                     html.Div(id='placeholder', children=[]),
                     dcc.Store(id="store", data=0),
                     dcc.Interval(id='interval', interval=1000),
+                    dbc.Collapse([
+                        dbc.Card([
+                            dbc.CardBody([
+                                html.Div(id='table_columns_details')
+                            ])
+                        ], className='text-center'),
+                    ], id='data_component-detail')
                 ]),
 
             )),
@@ -176,34 +193,44 @@ app.layout = html.Div([
                     ])
                 ], className='pt-2'),
                 dbc.Row([
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.P("Model Tahmini:"),
-                                dcc.Dropdown(
-                                    id='ml_model_selection',
-                                    options=["Linear Regression", "Decision Tree", "k-NN", "SVM"],
-                                    placeholder='Tahmin icin bir Model secin',
-                                    value='',
-                                    clearable=False,
-                                ),
-                                html.Br(),
-                                dbc.Row([
-                                    dbc.Col([
-                                        html.P("Sonuc:"),
-                                    ]),
-                                    dbc.Col([
-                                        dcc.Input(id='ml_model_pred', type='text', disabled=True),
-                                        html.Br(),
-                                        html.Br(),
-                                        dbc.Button('Tahmin Yap', id='ml_pred_start', n_clicks=0)
-                                    ]),
+                    # dbc.Collapse([
+                    #     dbc.Card([
+                    #         dbc.CardBody([
+                    #             html.Div(id='table_columns_details')
+                    #         ])
+                    #     ], className='text-center'),
+                    # ], id='data_component-detail')
 
-                                ])
-                            ])
-                        ], className='text-center')
-                    ])
                 ], className='pt-2'),
+                # dbc.Row([
+                #     dbc.Col([
+                #         dbc.Card([
+                #             dbc.CardBody([
+                #                 html.P("Model Tahmini:"),
+                #                 dcc.Dropdown(
+                #                     id='ml_model_selection',
+                #                     options=["Linear Regression", "Decision Tree", "k-NN", "SVM"],
+                #                     placeholder='Tahmin icin bir Model secin',
+                #                     value='',
+                #                     clearable=False,
+                #                 ),
+                #                 html.Br(),
+                #                 dbc.Row([
+                #                     dbc.Col([
+                #                         html.P("Sonuc:"),
+                #                     ]),
+                #                     dbc.Col([
+                #                         dcc.Input(id='ml_model_pred', type='text', disabled=True),
+                #                         html.Br(),
+                #                         html.Br(),
+                #                         dbc.Button('Tahmin Yap', id='ml_pred_start', n_clicks=0)
+                #                     ]),
+                #
+                #                 ])
+                #             ])
+                #         ], className='text-center')
+                #     ])
+                # ], className='pt-2'),
             ], className='pt-2', xs=2),
             dbc.Col([
                 dbc.Card([
@@ -251,19 +278,60 @@ app.layout = html.Div([
             dbc.Col([
                 dbc.Row([
                     dbc.Col([
-                        dbc.Card([
-                            dbc.CardBody([
-                                html.P("ML Grafik Secimi:"),
-                                dcc.Dropdown(
-                                    id='ml_selection',
-                                    options=["Decision Tree", "k-NN", "Linear Regression", "Logistic Regression",
-                                             "Naive Bayes", "SVM"],
-                                    value='Decision Tree',
-                                    clearable=False,
-                                    persistence=True,
-                                ),
+                        dbc.Row([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    html.P("ML Grafik Secimi:"),
+                                    dcc.Dropdown(
+                                        id='ml_selection',
+                                        options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes",
+                                                 "Linear Regression",
+                                                 "Logistic Regression"],
+                                        value='Decision Tree',
+                                        clearable=False,
+                                        persistence=True,
+                                    ),
+                                ])
+                            ], className='text-center')
+                        ], className='pt-2'),
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Card([
+                                    dbc.CardBody([
+                                        html.P("Model Tahmini:"),
+                                        dcc.Dropdown(
+                                            id='ml_model_selection',
+                                            options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes"],
+                                            placeholder='Tahmin icin bir Model secin',
+                                            value='',
+                                            clearable=False,
+                                        ),
+                                        html.Br(),
+                                        dbc.Row([
+                                            dbc.Col([
+                                                html.P("Sonuc:"),
+                                            ]),
+                                            dbc.Col([
+                                                dcc.Input(id='ml_model_pred', type='text', disabled=True),
+                                                html.Br(),
+                                                html.Br(),
+                                                dbc.Button('Tahmin Yap', color="warning", id='ml_pred_start',
+                                                           n_clicks=0)
+                                            ]),
+
+                                        ])
+                                    ])
+                                ], className='text-center')
                             ])
-                        ], className='text-center')
+                        ], className='pt-2'),
+                        dbc.Row([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    dbc.Button('Model Tahmin Sonuclari', id='model_pred_roc', style={'padding': 10}),
+                                ])
+                            ], className='text-center'),
+                        ], className='pt-2'),
+
                     ], xs=2),
                     dbc.Col([
                         dbc.Card([
@@ -294,8 +362,6 @@ app.layout = html.Div([
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                # html.P('ROC & CURVE grafikleri'),
-                                # dcc.Loading(dcc.Graph(id="roc-curve-model"), type="default")
                                 html.Label("k-means clustering"),
                                 dbc.Row([
                                     dbc.Col([
@@ -326,7 +392,36 @@ app.layout = html.Div([
                     ], xs=5)
                 ])
             ])
-        ], className='p-2 align-items-stretch')
+        ], className='p-2 align-items-stretch'),
+        # ML model prediction
+        dbc.Collapse([
+            dbc.Row([
+                dbc.Col([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    html.P('Classification Report Sonuclari'),
+                                    html.Div(id="ml_model_pred_result"),
+                                    html.P('Confusion Matrix Sonuclari'),
+                                    dcc.Graph(id="ml_model_confusion_matrix"),
+                                ])
+                            ], className='h-100 text-center')
+                        ], xs=6),
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    html.P('ROC and PR Curves Graphs'),
+                                    dcc.Graph(id="roc-curve-model", figure={})
+
+                                ], className='h-100 text-center')
+                            ])
+                        ], xs=6)
+                    ])
+                ])
+            ], className='p-2 align-items-stretch'),
+        ], id='model_pred')
+
     ])
 
 ],
@@ -340,6 +435,26 @@ app.layout = html.Div([
 @app.callback(Output('collapse-data', 'is_open'),
               [Input('veri_collapse-button', 'n_clicks')],
               [State('collapse-data', 'is_open')])
+def toggle_collapse(n, is_open):
+    if n:
+        return not is_open
+    return is_open
+
+
+# callback for table detail collapse button
+@app.callback(Output('data_component-detail', 'is_open'),
+              [Input('data_details', 'n_clicks')],
+              [State('data_component-detail', 'is_open')])
+def toggle_collapse(n, is_open):
+    if n:
+        return not is_open
+    return is_open
+
+
+# callback for collapse modal for model prediction
+@app.callback(Output('model_pred', 'is_open'),
+              [Input('model_pred_roc', 'n_clicks')],
+              [State('model_pred', 'is_open')])
 def toggle_collapse(n, is_open):
     if n:
         return not is_open
@@ -520,6 +635,28 @@ def update_dd_value(data):
 def update_dd_value(data):
     df_columns_no = pd.DataFrame(data)
     return len(df_columns_no.index)
+
+
+# callback for columns detail
+@app.callback(
+    Output('table_columns_details', 'children'),
+    Input('our-table', 'data'),
+    prevent_initial_call=True)
+def update_dd_value(data):
+    df = pd.DataFrame(data)
+    return [
+        html.P(
+            children=[
+                html.Ul(children=[
+                    html.Li(children=[i], style={
+                        "display": "inline-block",
+                        "padding": "10px",
+                        "font-weight": "bold",
+                        "text-align": "center"
+                    }) for i in df.columns])
+            ],
+        ),
+    ]
 
 
 # callback for updating x-variable value dropdown
@@ -704,11 +841,10 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
     # targetData= np.nan_to_num(targetData)
 
-
     # reset button click state
     changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
 
-    if (ml_selection == 'SVM' and 'ml_pred_start' in changed_id):
+    if ml_selection == 'SVM' and 'ml_pred_start' in changed_id:
         SVMnumeric_data_train, SVMnumeric_data_test, SVMtarget_data_train, SVMtarget_data_test = train_test_split(
             numeric_data, targetData, test_size=0.30)
         scaler = StandardScaler()
@@ -737,7 +873,6 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         SVMprediction = svcclassifier.predict(SVMnewTestData)
-        print("prediction: ", SVMprediction)
 
         # Yeni datanin tahmini sonuclandirmak
         if (SVMprediction[:] == 1):
@@ -752,20 +887,20 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         # return algthPredict
 
 
-
-    # Linear Regresion Prediction has problems, will return back and see more in the documentation
-    elif (ml_selection == 'Linear Regression' and 'ml_pred_start' in changed_id):
-        # print('Regression prediction')
-        LinRegNumeric_data_train, LinRegNumeric_data_test, LinReg_target_data_train, LinReg_target_data_test = train_test_split(
+    elif ml_selection == 'ANN' and 'ml_pred_start' in changed_id:
+        ANN_numeric_data_train, ANN_numeric_data_test, ANN_target_data_train, ANN_target_data_test = train_test_split(
             numeric_data, targetData, test_size=0.30)
-        reg = linear_model.LinearRegression()
-        # reg.fit(LinRegNumeric_data_train)
 
-        # LinRegNumeric_data_train = reg.transform(LinRegNumeric_data_train)
-        # LinRegNumeric_data_test = reg.transform(LinRegNumeric_data_test)
+        scaler = StandardScaler()
+        scaler.fit(ANN_numeric_data_train)
 
-        model_LineReg = reg.fit(LinRegNumeric_data_train, LinReg_target_data_train)
-        pred = model_LineReg.predict(LinRegNumeric_data_test)
+        ANN_numeric_data_train = scaler.transform(ANN_numeric_data_train)
+        ANN_numeric_data_test = scaler.transform(ANN_numeric_data_test)
+
+        mlp = MLPClassifier(hidden_layer_sizes=(50, 50, 50))
+        model_ANN = mlp.fit(ANN_numeric_data_train, ANN_target_data_train)
+
+        pred = model_ANN.predict(ANN_numeric_data_test)
 
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
@@ -776,40 +911,35 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         print("before:", new_numeric_data)
         del new_numeric_data['OUTPUT']
 
-        print("after output del: ",new_numeric_data)
-
-        # LinReg_newTestData = reg.transform(new_numeric_data)
+        ann_newTestData = scaler.transform(new_numeric_data)
 
         # Yeni datanin tahmini yapma
-        LinReg_prediction = model_LineReg.predict(new_numeric_data)
-        print(LinReg_prediction)
+        model_ANN_prediction = model_ANN.predict(ann_newTestData)
 
         # Yeni datanin tahmini sonuclandirmak
-        if (LinReg_prediction[:] == 1 or LinReg_prediction[:] <= 1):
+        if model_ANN_prediction[:] == 1:
             return "Tuberculosis"
-        elif (LinReg_prediction[:] == 5 or LinReg_prediction[:] <= 5):
+        elif model_ANN_prediction[:] == 5:
             return "LungCancer"
-        elif (LinReg_prediction[:] == 6 or LinReg_prediction[:] >= 6 or LinReg_prediction[:] <= 6.5):
+        elif model_ANN_prediction[:] == 6:
             return "Normal"
         else:
             return "NaN"
 
-
-    elif (ml_selection == 'k-NN' and 'ml_pred_start' in changed_id):
-
+    elif ml_selection == 'k-NN' and 'ml_pred_start' in changed_id:
         knn_numeric_data_train, knn_numeric_data_test, knn_target_data_train, knn_target_data_test = train_test_split(
             numeric_data, targetData, test_size=0.30)
         scaler = StandardScaler()
         scaler.fit(knn_numeric_data_train)
 
-        SVMnumeric_data_train = scaler.transform(knn_numeric_data_train)
-        SVMnumeric_data_test = scaler.transform(knn_numeric_data_test)
+        knn_numeric_data_train = scaler.transform(knn_numeric_data_train)
+        knn_numeric_data_test = scaler.transform(knn_numeric_data_test)
 
-        knn_model = KNeighborsRegressor(n_neighbors=3)
+        knn_model = KNeighborsClassifier(n_neighbors=3)
 
-        knn_model.fit(SVMnumeric_data_train, knn_target_data_train)
+        knn_model.fit(knn_numeric_data_train, knn_target_data_train)
 
-        algthPredict = knn_model.predict(SVMnumeric_data_test)
+        algthPredict = knn_model.predict(knn_numeric_data_test)
 
         # print(confusion_matrix(SVMtarget_data_test, algthPredict))
         #
@@ -829,28 +959,23 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         knn_prediction = knn_model.predict(knn_newTestData)
 
         # Yeni datanin tahmini sonuclandirmak
-        if (knn_prediction[:] == 1):
+        if knn_prediction[:] == 1:
             return "Tuberculosis"
-        elif (knn_prediction[:] == 5):
+        elif knn_prediction[:] == 5:
             return "LungCancer"
-        elif (knn_prediction[:] == 6):
+        elif knn_prediction[:] == 6:
             return "Normal"
         else:
-            return  "NaN"
+            return "NaN"
 
-    elif (ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id):
-
-        knn_numeric_data_train, knn_numeric_data_test, knn_target_data_train, knn_target_data_test = train_test_split(
+    elif ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id:
+        d_tree_numeric_data_train, d_tree_numeric_data_test, d_tree_target_data_train, d_tree_target_data_test = train_test_split(
             numeric_data, targetData, test_size=0.30)
         scaler = StandardScaler()
-        scaler.fit(knn_numeric_data_train)
+        scaler.fit(d_tree_numeric_data_train)
 
-        knn_numeric_data_train = scaler.transform(knn_numeric_data_train)
-        knn_numeric_data_test = scaler.transform(knn_numeric_data_test)
-
-        # print(knn_numeric_data_train)
-        # print(knn_numeric_data_test)
-
+        knn_numeric_data_train = scaler.transform(d_tree_numeric_data_train)
+        knn_numeric_data_test = scaler.transform(d_tree_numeric_data_test)
 
         d_tree_classifier = DecisionTreeClassifier(criterion='entropy', random_state=0)
         # d_tree_classifier = DecisionTreeClassifier(class_weight=None, criterion='entropy', max_depth=None,
@@ -860,13 +985,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         #                                            min_weight_fraction_leaf=0.0, presort=False,
         #                                            random_state=0, splitter='best')
 
-        d_tree_classifier.fit(knn_numeric_data_train, knn_target_data_train)
-
-        algthPredict = d_tree_classifier.predict(knn_numeric_data_test)
-
-        # print(confusion_matrix(SVMtarget_data_test, algthPredict))
-        #
-        # print(classification_report(SVMtarget_data_test, algthPredict))
+        d_tree_classifier.fit(d_tree_numeric_data_train, d_tree_target_data_train)
 
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
@@ -876,22 +995,372 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         new_numeric_data = convert_df.select_dtypes(include=np.number)
         del new_numeric_data['OUTPUT']
 
-        knn_newTestData = scaler.transform(new_numeric_data)
+        d_tree_newTestData = scaler.transform(new_numeric_data)
 
         # Yeni datanin tahmini yapma
-        knn_prediction = d_tree_classifier.predict(knn_newTestData)
+        d_tree_prediction = d_tree_classifier.predict(d_tree_newTestData)
 
         # Yeni datanin tahmini sonuclandirmak
-        if (knn_prediction[:] == 1):
+        if d_tree_prediction[:] == 1:
             return "Tuberculosis"
-        elif (knn_prediction[:] == 5):
+        elif d_tree_prediction[:] == 5:
             return "LungCancer"
-        elif (knn_prediction[:] == 6):
+        elif d_tree_prediction[:] == 6:
+            return "Normal"
+        else:
+            return "NaN"
+
+    elif ml_selection == 'Naive Bayes' and 'ml_pred_start' in changed_id:
+        naiveB_numeric_data_train, naiveB_numeric_data_test, naiveB_target_data_train, naiveB_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+        scaler = StandardScaler()
+        scaler.fit(naiveB_numeric_data_train)
+
+        naiveB_numeric_data_train = scaler.transform(naiveB_numeric_data_train)
+        naiveB_numeric_data_test = scaler.transform(naiveB_numeric_data_test)
+
+        naiveB_classifier = GaussianNB()
+
+        naiveB_classifier.fit(naiveB_numeric_data_train, naiveB_target_data_train)
+
+        # y_pred = naiveB_classifier.predict(naiveB_numeric_data_test)
+
+        # Selected row prediction matrix
+        sel_row = [data[i] for i in selected_rows]
+        dff_sel_row = pd.DataFrame(sel_row)
+        dff_sel_non_nan = dff_sel_row.fillna(0)
+        convert_df = dff_sel_non_nan._convert(numeric=True)
+        new_numeric_data = convert_df.select_dtypes(include=np.number)
+        del new_numeric_data['OUTPUT']
+
+        naiveB_newTestData = scaler.transform(new_numeric_data)
+
+        # Yeni datanin tahmini yapma
+        naiveB_prediction = naiveB_classifier.predict(naiveB_newTestData)
+        print(naiveB_prediction)
+
+        # Yeni datanin tahmini sonuclandirmak
+        if naiveB_prediction[:] == 1:
+            return "Tuberculosis"
+        elif naiveB_prediction[:] == 5:
+            return "LungCancer"
+        elif naiveB_prediction[:] == 6:
             return "Normal"
         else:
             return "NaN"
 
 
+# callback for model prediction result
+@app.callback(
+    [
+        Output('ml_model_pred_result', 'children'),
+        Output('ml_model_confusion_matrix', 'figure'),
+        Output('roc-curve-model', 'figure'),
+    ],
+    [
+        Input('ml_model_selection', 'value'),
+        Input('ml_pred_start', 'n_clicks'),
+        Input('our-table', 'data'),
+        Input('our-table', 'selected_rows')
+    ],
+    prevent_initial_call=True,
+)
+def model_pred_result(ml_selection, n_clicks, data, selected_rows):
+    dff = pd.DataFrame(data)
+    convert_df = dff._convert(numeric=True)
+    numeric_data = convert_df.select_dtypes(include=np.number)
+    del numeric_data['OUTPUT']
+    targetData = np.nan_to_num(convert_df['OUTPUT'])
+
+    # targetData= np.nan_to_num(targetData)
+
+    # reset button click state
+    changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+
+    if ml_selection == 'SVM' and 'ml_pred_start' in changed_id:
+        SVMnumeric_data_train, SVMnumeric_data_test, SVMtarget_data_train, SVMtarget_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+        scaler = StandardScaler()
+        scaler.fit(SVMnumeric_data_train)
+
+        SVMnumeric_data_train = scaler.transform(SVMnumeric_data_train)
+        SVMnumeric_data_test = scaler.transform(SVMnumeric_data_test)
+        svcclassifier = SVC(kernel='poly', degree=3, probability=True)
+
+        svcclassifier.fit(SVMnumeric_data_train, SVMtarget_data_train)
+        algthPredict = svcclassifier.predict(SVMnumeric_data_test)
+
+        dff_pred_res = pd.DataFrame.from_dict(
+            classification_report(SVMtarget_data_test, algthPredict, output_dict=True)).transpose()
+        df_table = dff_pred_res.reset_index()
+
+        clas_report_table = [
+            dash_table.DataTable(
+                columns=[{
+                    'name': str(x),
+                    'id': str(x),
+                }
+                    for x in df_table.columns.tolist()],
+                data=df_table.to_dict('records'),
+                fixed_rows={'headers': True},
+                style_table={'height': '300px', 'overflowY': 'auto'},
+                style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
+                # export_format='xlsx'
+
+            ),
+        ]
+
+        dff_conf_matrix = pd.DataFrame(confusion_matrix(SVMtarget_data_test, algthPredict))
+        fig = px.imshow(dff_conf_matrix, text_auto=True)
+
+        prod_roc = svcclassifier.predict_proba(SVMnumeric_data_test)[:, 1]
+        fpr, tpr, thresholds = metrics.roc_curve(SVMtarget_data_test, prod_roc, pos_label=1)
+        score = metrics.auc(fpr, tpr)
+
+        roc_fig = px.area(
+            x=fpr, y=tpr,
+            title=f'ROC Curve (AUC={score:.4f})',
+            labels=dict(
+                x='False Positive Rate',
+                y='True Positive Rate'))
+        roc_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=0, y1=1)
+
+        return [clas_report_table, fig, roc_fig]
+
+    elif ml_selection == 'ANN' and 'ml_pred_start' in changed_id:
+        ANN_numeric_data_train, ANN_numeric_data_test, ANN_target_data_train, ANN_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+
+        scaler = StandardScaler()
+        scaler.fit(ANN_numeric_data_train)
+
+        ANN_numeric_data_train = scaler.transform(ANN_numeric_data_train)
+        ANN_numeric_data_test = scaler.transform(ANN_numeric_data_test)
+
+        mlp = MLPClassifier(hidden_layer_sizes=(50, 50))
+        model_ANN = mlp.fit(ANN_numeric_data_train, ANN_target_data_train)
+
+        ann_pred = model_ANN.predict(ANN_numeric_data_test)
+
+        ann_dff_pred_res = pd.DataFrame.from_dict(
+            classification_report(ANN_target_data_test, ann_pred, output_dict=True)).transpose()
+        ann_df_table = ann_dff_pred_res.reset_index()
+
+        ann_clas_report_table = [
+            dash_table.DataTable(
+                columns=[{
+                    'name': str(x),
+                    'id': str(x),
+                }
+                    for x in ann_df_table.columns.tolist()],
+                data=ann_df_table.to_dict('records'),
+                fixed_rows={'headers': True},
+                style_table={'height': '300px', 'overflowY': 'auto'},
+                style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
+                # export_format='xlsx'
+
+            ),
+        ]
+
+        ann_dff_conf_matrix = pd.DataFrame(confusion_matrix(ANN_target_data_test, ann_pred))
+        ann_fig = px.imshow(ann_dff_conf_matrix, text_auto=True)
+
+        ann_prod_roc = model_ANN.predict_proba(ANN_numeric_data_test)[:, 1]
+        fpr, tpr, thresholds = metrics.roc_curve(ANN_target_data_test, ann_prod_roc, pos_label=1)
+        score = metrics.auc(fpr, tpr)
+
+        ann_roc_fig = px.area(
+            x=fpr, y=tpr,
+            title=f'ROC Curve (AUC={score:.4f})',
+            labels=dict(
+                x='False Positive Rate',
+                y='True Positive Rate'))
+        ann_roc_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=0, y1=1)
+
+        return [ann_clas_report_table, ann_fig, ann_roc_fig]
+
+
+
+    elif ml_selection == 'k-NN' and 'ml_pred_start' in changed_id:
+        knn_numeric_data_train, knn_numeric_data_test, knn_target_data_train, knn_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+        scaler = StandardScaler()
+        scaler.fit(knn_numeric_data_train)
+
+        knn_numeric_data_train = scaler.transform(knn_numeric_data_train)
+        knn_numeric_data_test = scaler.transform(knn_numeric_data_test)
+
+        knn_model = KNeighborsClassifier(n_neighbors=3)
+
+        knn_model.fit(knn_numeric_data_train, knn_target_data_train)
+
+        knn_algthPredict = knn_model.predict(knn_numeric_data_test)
+
+
+        knn_dff_pred_res = pd.DataFrame.from_dict(
+            classification_report(knn_target_data_test, knn_algthPredict, output_dict=True)).transpose()
+        knn_df_table = knn_dff_pred_res.reset_index()
+
+        knn_clas_report_table = [
+            dash_table.DataTable(
+                columns=[{
+                    'name': str(x),
+                    'id': str(x),
+                }
+                    for x in knn_df_table.columns.tolist()],
+                data=knn_df_table.to_dict('records'),
+                fixed_rows={'headers': True},
+                style_table={'height': '300px', 'overflowY': 'auto'},
+                style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
+                # export_format='xlsx'
+
+            ),
+        ]
+
+        knn_result = confusion_matrix(knn_target_data_test, knn_algthPredict)
+        knn_dff_conf_matrix = pd.DataFrame(knn_result)
+        knn_fig = px.imshow(knn_dff_conf_matrix, text_auto=True)
+
+        knn_prod_roc = knn_model.predict_proba(knn_numeric_data_test)[:, 1]
+        fpr, tpr, thresholds = metrics.roc_curve(knn_target_data_test, knn_prod_roc, pos_label=1)
+        score = metrics.auc(fpr, tpr)
+
+        knn_roc_fig = px.area(
+            x=fpr, y=tpr,
+            title=f'ROC Curve (AUC={score:.4f})',
+            labels=dict(
+                x='False Positive Rate',
+                y='True Positive Rate'))
+        knn_roc_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=0, y1=1)
+
+        return [knn_clas_report_table, knn_fig, knn_roc_fig]
+
+
+    elif ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id:
+        d_tree_numeric_data_train, d_tree_numeric_data_test, d_tree_target_data_train, d_tree_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+        scaler = StandardScaler()
+        scaler.fit(d_tree_numeric_data_train)
+
+        knn_numeric_data_train = scaler.transform(d_tree_numeric_data_train)
+        knn_numeric_data_test = scaler.transform(d_tree_numeric_data_test)
+
+        d_tree_classifier = DecisionTreeClassifier(criterion='entropy', random_state=0)
+        # d_tree_classifier = DecisionTreeClassifier(class_weight=None, criterion='entropy', max_depth=None,
+        #                                            max_features=None, max_leaf_nodes=None,
+        #                                            min_impurity_decrease=0.0, min_impurity_split=None,
+        #                                            min_samples_leaf=1, min_samples_split=2,
+        #                                            min_weight_fraction_leaf=0.0, presort=False,
+        #                                            random_state=0, splitter='best')
+
+        d_tree_classifier.fit(d_tree_numeric_data_train, d_tree_target_data_train)
+
+        d_tree_algthPredict = d_tree_classifier.predict(knn_numeric_data_test)
+
+        d_tree_dff_pred_res = pd.DataFrame.from_dict(
+            classification_report(d_tree_target_data_test, d_tree_algthPredict, output_dict=True)).transpose()
+        d_tree_df_table = d_tree_dff_pred_res.reset_index()
+
+        d_tree_clas_report_table = [
+            dash_table.DataTable(
+                columns=[{
+                    'name': str(x),
+                    'id': str(x),
+                }
+                    for x in d_tree_df_table.columns.tolist()],
+                data=d_tree_df_table.to_dict('records'),
+                fixed_rows={'headers': True},
+                style_table={'height': '300px', 'overflowY': 'auto'},
+                style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
+                # export_format='xlsx'
+
+            ),
+        ]
+
+        d_tree_dff_conf_matrix = pd.DataFrame(confusion_matrix(d_tree_target_data_test, d_tree_algthPredict))
+        d_tree_fig = px.imshow(d_tree_dff_conf_matrix, text_auto=True)
+
+        d_tree_prod_roc = d_tree_classifier.predict_proba(knn_numeric_data_test)[:, 1]
+        fpr, tpr, thresholds = metrics.roc_curve(d_tree_target_data_test, d_tree_prod_roc, pos_label=1)
+        score = metrics.auc(fpr, tpr)
+
+        d_tree_roc_fig = px.area(
+            x=fpr, y=tpr,
+            title=f'ROC Curve (AUC={score:.4f})',
+            labels=dict(
+                x='False Positive Rate',
+                y='True Positive Rate'))
+        d_tree_roc_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=0, y1=1)
+
+        return [d_tree_clas_report_table, d_tree_fig, d_tree_roc_fig]
+
+
+
+    elif ml_selection == 'Naive Bayes' and 'ml_pred_start' in changed_id:
+        naiveB_numeric_data_train, naiveB_numeric_data_test, naiveB_target_data_train, naiveB_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+        scaler = StandardScaler()
+        scaler.fit(naiveB_numeric_data_train)
+
+        naiveB_numeric_data_train = scaler.transform(naiveB_numeric_data_train)
+        naiveB_numeric_data_test = scaler.transform(naiveB_numeric_data_test)
+
+        naiveB_classifier = GaussianNB()
+
+        naiveB_classifier.fit(naiveB_numeric_data_train, naiveB_target_data_train)
+
+        naiveB_algthPredict = naiveB_classifier.predict(naiveB_numeric_data_test)
+
+        naiveB_dff_pred_res = pd.DataFrame.from_dict(
+            classification_report(naiveB_target_data_test, naiveB_algthPredict, output_dict=True)).transpose()
+        naiveB_df_table = naiveB_dff_pred_res.reset_index()
+
+        naiveB_clas_report_table = [
+            dash_table.DataTable(
+                columns=[{
+                    'name': str(x),
+                    'id': str(x),
+                }
+                    for x in naiveB_df_table.columns.tolist()],
+                data=naiveB_df_table.to_dict('records'),
+                fixed_rows={'headers': True},
+                style_table={'height': '300px', 'overflowY': 'auto'},
+                style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
+                # export_format='xlsx'
+
+            ),
+        ]
+
+        naiveB_dff_conf_matrix = pd.DataFrame(confusion_matrix(naiveB_target_data_test, naiveB_algthPredict))
+        naiveB_fig = px.imshow(naiveB_dff_conf_matrix, text_auto=True)
+
+        naiveB_prod_roc = naiveB_classifier.predict_proba(naiveB_numeric_data_test)[:, 1]
+        fpr, tpr, thresholds = metrics.roc_curve(naiveB_target_data_test, naiveB_prod_roc, pos_label=1)
+        score = metrics.auc(fpr, tpr)
+
+        naiveB_roc_fig = px.area(
+            x=fpr, y=tpr,
+            title=f'ROC Curve (AUC={score:.4f})',
+            labels=dict(
+                x='False Positive Rate',
+                y='True Positive Rate'))
+        naiveB_roc_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=0, y1=1)
+
+        return [naiveB_clas_report_table, naiveB_fig, naiveB_roc_fig]
+
+
 if __name__ == '__main__':
     # app.run_server(debug=True, use_reloader=False, port=4000)
     app.run_server(debug=True, port=4000)
+
+# Not: Linear Regresion Prediction has problems, will return back and see more in the documentation

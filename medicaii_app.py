@@ -34,16 +34,18 @@ from sklearn.preprocessing import StandardScaler
 from sklearn import *
 from sklearn.cluster import KMeans
 from sklearn.metrics import classification_report, confusion_matrix
+from catboost import CatBoostClassifier
 
 # app requires "pip install psycopg2" as well
 
 dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
+new_style_sheet = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 # PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
 PLOTLY_LOGO = "/assets/mylogo.jpg"
 
 server = Flask(__name__)
 app = dash.Dash(__name__, server=server, suppress_callback_exceptions=True,
-                external_stylesheets=[dbc.themes.BOOTSTRAP, dbc_css])
+                external_stylesheets=[dbc.themes.BOOTSTRAP, dbc_css, new_style_sheet])
 server = app.server
 
 app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
@@ -61,9 +63,9 @@ auth = dash_auth.BasicAuth(
 
 # connection string for live database on heroku
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://tctazcptsemgbx:f5571aba7ec0ee16ba3daa04037580d825844d2a0bdade4224fe3295dfd4d7c5@ec2-54-228-32-29.eu-west-1.compute.amazonaws.com:5432/db8f6qmenvsgf2"
+# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
 app.server.config[
-    "SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
-# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
+    "SQLALCHEMY_DATABASE_URI"] = "postgresql://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
 db = SQLAlchemy(app.server)
 
 # ---------------------------------------------------------------------------------
@@ -187,6 +189,7 @@ app.layout = html.Div([
                                     options=["Scatter", "Bar", "Histogram", "Box", "Violin"],
                                     value='Scatter',
                                     persistence=True,
+                                    persistence_type='session',
                                 ),
                             ])
                         ], className='text-center')
@@ -241,6 +244,7 @@ app.layout = html.Div([
                             value='',
                             multi=True,
                             persistence=True,
+                            persistence_type='session',
                         ),
                         dcc.Graph(id="Graff_scatter_matrix"),
                     ])
@@ -257,6 +261,7 @@ app.layout = html.Div([
                                     id="x-variable",
                                     value='',
                                     persistence=True,
+                                    persistence_type='session',
                                 )
                             ]),
                             dbc.Col([
@@ -264,7 +269,8 @@ app.layout = html.Div([
                                 dcc.Dropdown(
                                     id="y-variable",
                                     value='',
-                                    persistence=True
+                                    persistence=True,
+                                    persistence_type='session',
                                 ),
                             ]),
                         ]),
@@ -290,6 +296,7 @@ app.layout = html.Div([
                                         value='Decision Tree',
                                         clearable=False,
                                         persistence=True,
+                                        persistence_type='session',
                                     ),
                                 ])
                             ], className='text-center')
@@ -301,7 +308,7 @@ app.layout = html.Div([
                                         html.P("Model Tahmini:"),
                                         dcc.Dropdown(
                                             id='ml_model_selection',
-                                            options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes"],
+                                            options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes", "CatBoost"],
                                             placeholder='Tahmin icin bir Model secin',
                                             value='',
                                             clearable=False,
@@ -343,7 +350,8 @@ app.layout = html.Div([
                                         dcc.Dropdown(
                                             id="ml_x_vale",
                                             value='',
-                                            persistence=True
+                                            persistence=True,
+                                            persistence_type='session',
                                         ),
                                     ]),
                                     dbc.Col([
@@ -351,7 +359,8 @@ app.layout = html.Div([
                                         dcc.Dropdown(
                                             id="ml_y_vale",
                                             value='',
-                                            persistence=True
+                                            persistence=True,
+                                            persistence_type='session',
                                         ),
                                     ]),
                                 ]),
@@ -369,7 +378,8 @@ app.layout = html.Div([
                                         dcc.Dropdown(
                                             id="xk-variable",
                                             value="",
-                                            persistence=True
+                                            persistence=True,
+                                            persistence_type='session',
                                         ),
                                     ]),
                                     dbc.Col([
@@ -377,7 +387,8 @@ app.layout = html.Div([
                                         dcc.Dropdown(
                                             id="yk-variable",
                                             value="",
-                                            persistence=True
+                                            persistence=True,
+                                            persistence_type='session',
                                         ),
                                     ]),
                                     dbc.Col([
@@ -470,11 +481,15 @@ def populate_datatable(n_intervals):
         dash_table.DataTable(
             id='our-table',
             columns=[{
+                         'name': str(x),
+                         'id': str(x),
+                         'deletable': False,
+                     } if x == 'SONUC' or x == 'OUTPUT'
+                     else {
                 'name': str(x),
                 'id': str(x),
                 'deletable': True,
-            }
-                for x in df.columns],
+            } for x in df.columns],
             data=df.to_dict('records'),
             editable=True,
             row_deletable=True,
@@ -487,8 +502,7 @@ def populate_datatable(n_intervals):
             style_table={'height': '300px', 'overflowY': 'auto'},
             style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
             page_size=15,
-            # export_format='xlsx'
-
+            export_format='xlsx',
         ),
     ]
 
@@ -546,7 +560,6 @@ def df_to_db(n_clicks, n_intervals, dataset, s):
     if input_triggered == "save_to_postgres":
         s = 6
         pg = pd.DataFrame(dataset)
-        # print("to_db ", pg.dtypes)
         pg.to_sql('hastaveri', con=db.engine, if_exists='replace', index=False)
         return output, s
     elif input_triggered == 'interval' and s > 0:
@@ -583,18 +596,18 @@ def update_bar_chart(dims, data):
     prevent_initial_call=True)
 def display_animated_graph(selection, x_var, y_var, data):
     df_multi = pd.DataFrame(data)
-    multi_fig = make_subplots(rows=1, cols=2)
-    multi_fig.add_trace(go.Scatter(x=df_multi["ALT"], y=df_multi["OUTPUT"], mode="lines"), row=1, col=1)
-    multi_fig.add_trace(go.Bar(x=df_multi["Gender"], y=df_multi["OUTPUT"]), row=1, col=2)
+    # multi_fig = make_subplots(rows=1, cols=2)
+    # multi_fig.add_trace(go.Scatter(x=df_multi["ALT"], y=df_multi["OUTPUT"], mode="lines"), row=1, col=1)
+    # multi_fig.add_trace(go.Bar(x=df_multi["Gender"], y=df_multi["OUTPUT"]), row=1, col=2)
     animations = {
         'Scatter': px.scatter(df_multi, x=x_var, y=y_var),
 
         'Bar': px.bar(df_multi, x=x_var, y=y_var, barmode="group"),
 
-        'Histogram': px.histogram(df_multi, x=x_var, y=y_var, color="DISEASE", marginal="rug",
+        'Histogram': px.histogram(df_multi, x=x_var, y=y_var, color="SONUC", marginal="rug",
                                   hover_data=df_multi.columns),
-        'Box': px.box(df_multi, x=x_var, y=y_var, color="DISEASE", notched=True),
-        'Violin': px.violin(df_multi, x=x_var, y=y_var, color="DISEASE", box=True, points='all',
+        'Box': px.box(df_multi, x=x_var, y=y_var, color="SONUC", notched=True),
+        'Violin': px.violin(df_multi, x=x_var, y=y_var, color="SONUC", box=True, points='all',
                             hover_data=df_multi.columns),
         # 'Go_Scatter': px.scatter(df_multi, x="RBC", y="HGB", color="DISEASE"),
         # 'Go_Scatter': multi_fig,
@@ -1049,6 +1062,48 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         else:
             return "NaN"
 
+    elif ml_selection == 'CatBoost' and 'ml_pred_start' in changed_id:
+        CatBoost_numeric_data_train, CatBoost_numeric_data_test, CatBoost_target_data_train, CatBoost_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+        # scaler = StandardScaler()
+        # scaler.fit(CatBoost_numeric_data_train)
+
+        # CatBoost_numeric_data_train = scaler.transform(CatBoost_numeric_data_train)
+        # CatBoost_numeric_data_test = scaler.transform(CatBoost_numeric_data_test)
+
+        CatBoost_classifier = CatBoostClassifier(
+            iterations=5,
+            learning_rate=0.1,
+            # loss_function='CrossEntropy'
+        )
+
+        CatBoost_classifier.fit(CatBoost_numeric_data_train, CatBoost_target_data_train)
+
+        # y_pred = naiveB_classifier.predict(naiveB_numeric_data_test)
+
+        # Selected row prediction matrix
+        sel_row = [data[i] for i in selected_rows]
+        dff_sel_row = pd.DataFrame(sel_row)
+        dff_sel_non_nan = dff_sel_row.fillna(0)
+        convert_df = dff_sel_non_nan._convert(numeric=True)
+        new_numeric_data = convert_df.select_dtypes(include=np.number)
+        del new_numeric_data['OUTPUT']
+
+        # CatBoost_newTestData = scaler.transform(new_numeric_data)
+
+        # Yeni datanin tahmini yapma
+        CatBoost_prediction = CatBoost_classifier.predict(new_numeric_data)
+
+        # Yeni datanin tahmini sonuclandirmak
+        if CatBoost_prediction[:] == 1:
+            return "Tuberculosis"
+        elif CatBoost_prediction[:] == 5:
+            return "LungCancer"
+        elif CatBoost_prediction[:] == 6:
+            return "Normal"
+        else:
+            return "NaN"
+
 
 # callback for model prediction result
 @app.callback(
@@ -1199,7 +1254,6 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
         knn_model.fit(knn_numeric_data_train, knn_target_data_train)
 
         knn_algthPredict = knn_model.predict(knn_numeric_data_test)
-
 
         knn_dff_pred_res = pd.DataFrame.from_dict(
             classification_report(knn_target_data_test, knn_algthPredict, output_dict=True)).transpose()
@@ -1357,6 +1411,60 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
             x0=0, x1=1, y0=0, y1=1)
 
         return [naiveB_clas_report_table, naiveB_fig, naiveB_roc_fig]
+
+
+    elif ml_selection == 'CatBoost' and 'ml_pred_start' in changed_id:
+        CatBoost_numeric_data_train, CatBoost_numeric_data_test, CatBoost_target_data_train, CatBoost_target_data_test = train_test_split(
+            numeric_data, targetData, test_size=0.30)
+
+        CatBoost_classifier = CatBoostClassifier(
+            iterations=5,
+            learning_rate=0.1,
+            # loss_function='CrossEntropy'
+        )
+
+        CatBoost_classifier.fit(CatBoost_numeric_data_train, CatBoost_target_data_train)
+
+        CatBoost_prediction = CatBoost_classifier.predict(CatBoost_numeric_data_test)
+
+    CatBoost_dff_pred_res = pd.DataFrame.from_dict(
+        classification_report(CatBoost_target_data_test, CatBoost_prediction, output_dict=True)).transpose()
+    CatBoost_df_table = CatBoost_dff_pred_res.reset_index()
+
+    CatBoost_clas_report_table = [
+        dash_table.DataTable(
+            columns=[{
+                'name': str(x),
+                'id': str(x),
+            }
+                for x in CatBoost_df_table.columns.tolist()],
+            data=CatBoost_df_table.to_dict('records'),
+            fixed_rows={'headers': True},
+            style_table={'height': '300px', 'overflowY': 'auto'},
+            style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
+            # export_format='xlsx'
+
+        ),
+    ]
+
+    CatBoost_dff_conf_matrix = pd.DataFrame(confusion_matrix(CatBoost_target_data_test, CatBoost_prediction))
+    CatBoost_fig = px.imshow(CatBoost_dff_conf_matrix, text_auto=True)
+
+    naiveB_prod_roc = CatBoost_classifier.predict_proba(CatBoost_numeric_data_test)[:, 1]
+    fpr, tpr, thresholds = metrics.roc_curve(CatBoost_target_data_test, naiveB_prod_roc, pos_label=1)
+    score = metrics.auc(fpr, tpr)
+
+    CatBoost_roc_fig = px.area(
+        x=fpr, y=tpr,
+        title=f'ROC Curve (AUC={score:.4f})',
+        labels=dict(
+            x='False Positive Rate',
+            y='True Positive Rate'))
+    CatBoost_roc_fig.add_shape(
+        type='line', line=dict(dash='dash'),
+        x0=0, x1=1, y0=0, y1=1)
+
+    return [CatBoost_clas_report_table, CatBoost_fig, CatBoost_roc_fig]
 
 
 if __name__ == '__main__':

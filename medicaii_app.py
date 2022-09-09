@@ -2,8 +2,6 @@ import dash
 from dash.dependencies import Input, Output, State
 from dash import dash_table, dcc, html
 import dash_bootstrap_components as dbc
-import datetime
-from dash_bootstrap_components._components.Container import Container
 import dash_auth
 
 # pandas and plotly library
@@ -11,7 +9,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from plotly.subplots import make_subplots
 
 from flask_sqlalchemy import SQLAlchemy
 from flask import Flask
@@ -40,7 +37,6 @@ from catboost import CatBoostClassifier
 
 dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
 new_style_sheet = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-# PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
 PLOTLY_LOGO = "/assets/mylogo.jpg"
 
 server = Flask(__name__)
@@ -183,57 +179,39 @@ app.layout = html.Div([
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.P("Grafik Secimi:"),
+                                html.P("Model Tahmini:"),
                                 dcc.Dropdown(
-                                    id='selection',
-                                    options=["Scatter", "Bar", "Histogram", "Box", "Violin"],
-                                    value='Scatter',
-                                    persistence=True,
-                                    persistence_type='session',
+                                    id='ml_model_selection',
+                                    options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes", "CatBoost"],
+                                    placeholder='Tahmin icin bir Model secin',
+                                    value='',
+                                    clearable=False,
                                 ),
+                                html.Br(),
+                                dbc.Row([
+                                    dbc.Col([
+                                        html.P("Sonuc:"),
+                                    ]),
+                                    dbc.Col([
+                                        dcc.Input(id='ml_model_pred', type='text', disabled=True),
+                                        html.Br(),
+                                        html.Br(),
+                                        dbc.Button('Tahmin Yap', color="warning", id='ml_pred_start',
+                                                   n_clicks=0)
+                                    ]),
+
+                                ])
                             ])
                         ], className='text-center')
                     ])
                 ], className='pt-2'),
                 dbc.Row([
-                    # dbc.Collapse([
-                    #     dbc.Card([
-                    #         dbc.CardBody([
-                    #             html.Div(id='table_columns_details')
-                    #         ])
-                    #     ], className='text-center'),
-                    # ], id='data_component-detail')
-
+                    dbc.Card([
+                        dbc.CardBody([
+                            dbc.Button('Model Tahmin Sonuclari', id='model_pred_roc', style={'padding': 10}),
+                        ])
+                    ], className='text-center'),
                 ], className='pt-2'),
-                # dbc.Row([
-                #     dbc.Col([
-                #         dbc.Card([
-                #             dbc.CardBody([
-                #                 html.P("Model Tahmini:"),
-                #                 dcc.Dropdown(
-                #                     id='ml_model_selection',
-                #                     options=["Linear Regression", "Decision Tree", "k-NN", "SVM"],
-                #                     placeholder='Tahmin icin bir Model secin',
-                #                     value='',
-                #                     clearable=False,
-                #                 ),
-                #                 html.Br(),
-                #                 dbc.Row([
-                #                     dbc.Col([
-                #                         html.P("Sonuc:"),
-                #                     ]),
-                #                     dbc.Col([
-                #                         dcc.Input(id='ml_model_pred', type='text', disabled=True),
-                #                         html.Br(),
-                #                         html.Br(),
-                #                         dbc.Button('Tahmin Yap', id='ml_pred_start', n_clicks=0)
-                #                     ]),
-                #
-                #                 ])
-                #             ])
-                #         ], className='text-center')
-                #     ])
-                # ], className='pt-2'),
             ], className='pt-2', xs=2),
             dbc.Col([
                 dbc.Card([
@@ -253,10 +231,20 @@ app.layout = html.Div([
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        html.P('Grafikler'),
+                        dbc.Row([
+                            dbc.Col([html.Label("Grafikler:")]),
+                            dbc.Col([
+                                dcc.Dropdown(
+                                    id='selection',
+                                    options=["Scatter", "Bar", "Histogram", "Box", "Violin"],
+                                    value='Scatter',
+                                    persistence=True,
+                                    persistence_type='session',
+                                )]),
+                        ]),
+                        html.Br(),
                         dbc.Row([
                             dbc.Col([
-                                dbc.Label("X variable"),
                                 dcc.Dropdown(
                                     id="x-variable",
                                     value='',
@@ -265,7 +253,6 @@ app.layout = html.Div([
                                 )
                             ]),
                             dbc.Col([
-                                dbc.Label("Y variable"),
                                 dcc.Dropdown(
                                     id="y-variable",
                                     value='',
@@ -284,69 +271,25 @@ app.layout = html.Div([
             dbc.Col([
                 dbc.Row([
                     dbc.Col([
-                        dbc.Row([
-                            dbc.Card([
-                                dbc.CardBody([
-                                    html.P("ML Grafik Secimi:"),
-                                    dcc.Dropdown(
-                                        id='ml_selection',
-                                        options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes",
-                                                 "Linear Regression",
-                                                 "Logistic Regression"],
-                                        value='Decision Tree',
-                                        clearable=False,
-                                        persistence=True,
-                                        persistence_type='session',
-                                    ),
-                                ])
-                            ], className='text-center')
-                        ], className='pt-2'),
-                        dbc.Row([
-                            dbc.Col([
-                                dbc.Card([
-                                    dbc.CardBody([
-                                        html.P("Model Tahmini:"),
-                                        dcc.Dropdown(
-                                            id='ml_model_selection',
-                                            options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes", "CatBoost"],
-                                            placeholder='Tahmin icin bir Model secin',
-                                            value='',
-                                            clearable=False,
-                                        ),
-                                        html.Br(),
-                                        dbc.Row([
-                                            dbc.Col([
-                                                html.P("Sonuc:"),
-                                            ]),
-                                            dbc.Col([
-                                                dcc.Input(id='ml_model_pred', type='text', disabled=True),
-                                                html.Br(),
-                                                html.Br(),
-                                                dbc.Button('Tahmin Yap', color="warning", id='ml_pred_start',
-                                                           n_clicks=0)
-                                            ]),
-
-                                        ])
-                                    ])
-                                ], className='text-center')
-                            ])
-                        ], className='pt-2'),
-                        dbc.Row([
-                            dbc.Card([
-                                dbc.CardBody([
-                                    dbc.Button('Model Tahmin Sonuclari', id='model_pred_roc', style={'padding': 10}),
-                                ])
-                            ], className='text-center'),
-                        ], className='pt-2'),
-
-                    ], xs=2),
-                    dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.P('ML Modelleri'),
+                                dbc.Row([
+                                    dbc.Col([html.P("ML Grafik Secimi:")]),
+                                    dbc.Col([
+                                        dcc.Dropdown(
+                                            id='ml_selection',
+                                            options=["ANN", "SVM", "k-NN", "Decision Tree", "Naive Bayes",
+                                                     "Linear Regression",
+                                                     "Logistic Regression"],
+                                            value='Decision Tree',
+                                            clearable=False,
+                                            persistence=True,
+                                            persistence_type='session',
+                                        )]),
+                                ]),
+                                html.Br(),
                                 dbc.Row([
                                     dbc.Col([
-                                        dbc.Label("X ekseni"),
                                         dcc.Dropdown(
                                             id="ml_x_vale",
                                             value='',
@@ -355,7 +298,6 @@ app.layout = html.Div([
                                         ),
                                     ]),
                                     dbc.Col([
-                                        dbc.Label("Y ekseni"),
                                         dcc.Dropdown(
                                             id="ml_y_vale",
                                             value='',
@@ -367,7 +309,7 @@ app.layout = html.Div([
                                 dcc.Graph(id="ml_model"),
                             ])
                         ], className='h-100 text-center')
-                    ], xs=5),
+                    ], xs=6),
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
@@ -400,7 +342,7 @@ app.layout = html.Div([
 
                             ], className='h-100 text-center')
                         ])
-                    ], xs=5)
+                    ], xs=6)
                 ])
             ])
         ], className='p-2 align-items-stretch'),
@@ -868,12 +810,6 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         svcclassifier = SVC(kernel='poly', degree=3)
         svcclassifier.fit(SVMnumeric_data_train, SVMtarget_data_train)
 
-        algthPredict = svcclassifier.predict(SVMnumeric_data_test)
-
-        # print(confusion_matrix(SVMtarget_data_test, algthPredict))
-        #
-        # print(classification_report(SVMtarget_data_test, algthPredict))
-
         # Selected row prediction matrix
         sel_row = [data[i] for i in selected_rows]
         dff_sel_row = pd.DataFrame(sel_row)
@@ -888,12 +824,10 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         SVMprediction = svcclassifier.predict(SVMnewTestData)
 
         # Yeni datanin tahmini sonuclandirmak
-        if (SVMprediction[:] == 1):
-            return "Tuberculosis"
-        elif (SVMprediction[:] == 5):
-            return "LungCancer"
-        elif (SVMprediction[:] == 6):
-            return "Normal"
+        if SVMprediction[:] == 1:
+            return "DIPPER"
+        elif SVMprediction[:] == 2:
+            return "NON-DIPPER"
         else:
             return "NaN"
 
@@ -931,11 +865,9 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini sonuclandirmak
         if model_ANN_prediction[:] == 1:
-            return "Tuberculosis"
-        elif model_ANN_prediction[:] == 5:
-            return "LungCancer"
-        elif model_ANN_prediction[:] == 6:
-            return "Normal"
+            return "DIPPER"
+        elif model_ANN_prediction[:] == 2:
+            return "NON-DIPPER"
         else:
             return "NaN"
 
@@ -973,11 +905,9 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini sonuclandirmak
         if knn_prediction[:] == 1:
-            return "Tuberculosis"
-        elif knn_prediction[:] == 5:
-            return "LungCancer"
-        elif knn_prediction[:] == 6:
-            return "Normal"
+            return "DIPPER"
+        elif knn_prediction[:] == 2:
+            return "NON-DIPPER"
         else:
             return "NaN"
 
@@ -1015,11 +945,9 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini sonuclandirmak
         if d_tree_prediction[:] == 1:
-            return "Tuberculosis"
-        elif d_tree_prediction[:] == 5:
-            return "LungCancer"
-        elif d_tree_prediction[:] == 6:
-            return "Normal"
+            return "DIPPER"
+        elif d_tree_prediction[:] == 2:
+            return "NON-DIPPER"
         else:
             return "NaN"
 
@@ -1054,11 +982,9 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini sonuclandirmak
         if naiveB_prediction[:] == 1:
-            return "Tuberculosis"
-        elif naiveB_prediction[:] == 5:
-            return "LungCancer"
-        elif naiveB_prediction[:] == 6:
-            return "Normal"
+            return "DIPPER"
+        elif naiveB_prediction[:] == 2:
+            return "NON-DIPPER"
         else:
             return "NaN"
 
@@ -1096,11 +1022,9 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini sonuclandirmak
         if CatBoost_prediction[:] == 1:
-            return "Tuberculosis"
-        elif CatBoost_prediction[:] == 5:
-            return "LungCancer"
-        elif CatBoost_prediction[:] == 6:
-            return "Normal"
+            return "DIPPER"
+        elif CatBoost_prediction[:] == 2:
+            return "NON-DIPPER"
         else:
             return "NaN"
 

@@ -1,3 +1,6 @@
+import base64
+import io
+
 import dash
 from dash.dependencies import Input, Output, State
 from dash import dash_table, dcc, html
@@ -61,7 +64,8 @@ auth = dash_auth.BasicAuth(
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://tctazcptsemgbx:f5571aba7ec0ee16ba3daa04037580d825844d2a0bdade4224fe3295dfd4d7c5@ec2-54-228-32-29.eu-west-1.compute.amazonaws.com:5432/db8f6qmenvsgf2"
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
 app.server.config[
-    "SQLALCHEMY_DATABASE_URI"] = "postgresql://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
+    # "SQLALCHEMY_DATABASE_URI"] = "postgresql://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
+    "SQLALCHEMY_DATABASE_URI"] = "postgresql://mytclvdpxqptvm:b4d90ca9ae7b69dca61832c9bdc2df8580e1f4e43e3073100cde3d6c935380f9@ec2-34-200-205-45.compute-1.amazonaws.com:5432/deei4r7pfa937t"
 db = SQLAlchemy(app.server)
 
 # ---------------------------------------------------------------------------------
@@ -96,7 +100,13 @@ navbar = dbc.Navbar(
                 className="g-0",
             ),
             dbc.Button('Veriler', id='veri_collapse-button',
-                       style={'padding': 10, 'top': '10px', 'left': '10px', 'width': '25%'}),
+                       style={'padding': 10, 'top': '10px', 'margin-left': '35%', 'width': '25%'}),
+            dcc.Upload(id='upload-data',
+                       children=dbc.Button('Dosya Yukle',
+                                           outline=True,
+                                           color="info",
+                                           style={'padding': 10, 'top': '10px'}),
+                       multiple=True)
         ]
     ),
     color="dark",
@@ -109,25 +119,42 @@ navbar = dbc.Navbar(
 
 app.layout = html.Div([
     navbar,
+    html.Div(id='data_upload_output'),
     html.Div(children=[
         dbc.Collapse(
             dbc.Card(dbc.CardBody(
                 html.Div([
-                    dcc.Input(
-                        id='adding-rows-name',
-                        placeholder='Yeni ozellik adi...',
-                        value='',
-                        style={'padding': 10, "display": "inline-block"}
-                    ),
-                    dcc.Dropdown(
-                        id='column_data_type',
-                        placeholder='Select datatype',
-                        options=['numeric', 'text'],
-                        value='',
-                        style={"display": "inline-block", "left": "10px", "width": "150px"}
-                    ),
-                    dbc.Button('Ozellik Ekle', id='adding-columns-button', n_clicks=0,
-                               style={"display": "inline-block", "margin-left": "20px"}),
+                    dbc.Row([
+                        dbc.Col([
+                            dcc.Input(
+                                id='adding-rows-name',
+                                placeholder='Yeni ozellik adi...',
+                                value='',
+                                style={'padding': 10, "display": "inline-block"}
+                            ),
+                            dcc.Dropdown(
+                                id='column_data_type',
+                                placeholder='Select datatype',
+                                options=['numeric', 'text'],
+                                value='',
+                                style={"display": "inline-block", "left": "10px", "width": "150px", "top": "15px"}
+                            ),
+                            dbc.Button('Ozellik Ekle', id='adding-columns-button', n_clicks=0,
+                                       style={"display": "inline-block", "margin-left": "20px"}),
+                        ], className='pt-2', xs=9),
+                        dbc.Col([
+                            dcc.Dropdown(
+                                id='dd_input',
+                                placeholder='Select a table',
+                                options=["1", "2"],
+                                value='',
+                                persistence=True,
+                                style={"display": "inline-block", "width": "200px", "top": "15px"}
+                            ),
+                            dbc.Button('Tabloyu Sil', id='delete_from_db', color="danger", n_clicks=0,
+                                       style={"margin-left": "20px"}),
+                        ], className='pt-2', xs=3),
+                    ]),
                     dcc.Interval(id='interval_pg', interval=86400000 * 7, n_intervals=0),
                     # activated once/week or when page refreshed
                     html.Br(),
@@ -143,6 +170,7 @@ app.layout = html.Div([
 
                     # Create notification when saving to database
                     html.Div(id='placeholder', children=[]),
+                    html.Div(id='delete_placeholder', children=[]),
                     dcc.Store(id="store", data=0),
                     dcc.Interval(id='interval', interval=1000),
                     dbc.Collapse([
@@ -384,6 +412,66 @@ app.layout = html.Div([
 # ---------------------------------------------------------------------------------
 # app callbacks
 # ---------------------------------------------------------------------------------
+# callbacks for data uploading
+def parse_contents(contents, filename):
+    content_type, content_string = contents.split(',')
+    fileNameCSV = filename.split('.csv')[0]
+    fileNameXLS = filename.split('.xlsx')[0]
+
+    decoded = base64.b64decode(content_string)
+    try:
+        if 'csv' in filename:
+            # Assume that the user uploaded a CSV file
+            df = pd.read_csv(
+                io.StringIO(decoded.decode('utf-8')))
+            # label_dict = dict(zip(range(len(df['SONUC'].unique())), df['SONUC'].unique()))
+            label_dict = dict(zip(np.arange(1, len(df['SONUC'].unique()) + 1), df['SONUC'].unique()))
+            df_label = pd.DataFrame.from_dict(label_dict, orient='index').reset_index().rename(
+                columns={0: 'SONUC', 'index': 'OUTPUT'})
+            df_new = df.merge(df_label, on='SONUC')
+            df_new.to_sql(name=fileNameCSV.lower() + '_', con=db.engine, if_exists='replace', index=False)
+        elif 'xlsx' in filename:
+            # Assume that the user uploaded an excel file
+            df = pd.read_excel(io.BytesIO(decoded))
+            # label_dict = dict(zip(range(len(df['SONUC'].unique())), df['SONUC'].unique()))
+            label_dict = dict(zip(np.arange(1, len(df['SONUC'].unique()) + 1), df['SONUC'].unique()))
+            df_label = pd.DataFrame.from_dict(label_dict, orient='index').reset_index().rename(
+                columns={0: 'SONUC', 'index': 'OUTPUT'})
+            df_new = df.merge(df_label, on='SONUC')
+            df_new.to_sql(name=fileNameXLS.lower() + '_', con=db.engine, if_exists='replace', index=False)
+    except Exception as e:
+        print(e)
+        return html.Div(children=[
+            dbc.Alert(
+                'Kaydetme esnasinda bir hata olustu!',
+                color="warning",
+                is_open=True,
+                duration=4000,
+            ),
+
+        ])
+
+    return html.Div(children=[
+        dbc.Alert(
+            filename + " isimli dosya basariyla kaydedildi",
+            color="success",
+            is_open=True,
+            duration=4000,
+        ),
+    ])
+
+
+@app.callback(Output('data_upload_output', 'children'),
+              Input('upload-data', 'contents'),
+              State('upload-data', 'filename'))
+def update_output(list_of_contents, list_of_names):
+    if list_of_contents is not None:
+        children = [
+            parse_contents(c, n) for c, n in
+            zip(list_of_contents, list_of_names)]
+        return children
+
+
 # callback for collapse button
 @app.callback(Output('collapse-data', 'is_open'),
               [Input('veri_collapse-button', 'n_clicks')],
@@ -416,9 +504,15 @@ def toggle_collapse(n, is_open):
 
 # callback for populating table from database
 @app.callback(Output('postgres_datatable', 'children'),
-              [Input('interval_pg', 'n_intervals')])
-def populate_datatable(n_intervals):
-    df = pd.read_sql_table('hastaveri', con=db.engine)
+              [
+                  Input('dd_input', 'value'),
+                  Input('interval_pg', 'n_intervals')
+              ])
+def populate_datatable(dd_input, n_intervals):
+    # df = pd.read_sql_table('hastaveri', con=db.engine)
+    query_from_dd = db.session.execute("select * from "f"{dd_input}""")
+    query_from_dd_clm = db.session.execute("select * from "f"{dd_input}""").keys()
+    df = pd.DataFrame(query_from_dd, columns=query_from_dd_clm)
     return [
         dash_table.DataTable(
             id='our-table',
@@ -485,14 +579,21 @@ def add_row(n_clicks, rows, columns):
 
 # callback for saving into database
 @app.callback(
-    [Output('placeholder', 'children'),
-     Output("store", "data")],
-    [Input('save_to_postgres', 'n_clicks'),
-     Input("interval", "n_intervals")],
-    [State('our-table', 'data'),
-     State('store', 'data')],
+    [
+        Output('placeholder', 'children'),
+        Output("store", "data")
+    ],
+    [
+        Input('dd_input', 'value'),
+        Input('save_to_postgres', 'n_clicks'),
+        Input("interval", "n_intervals")
+    ],
+    [
+        State('our-table', 'data'),
+        State('store', 'data')
+    ],
     prevent_initial_call=True)
-def df_to_db(n_clicks, n_intervals, dataset, s):
+def df_to_db(input_dd, n_clicks, n_intervals, dataset, s):
     output = html.Plaintext("The data has been saved to your PostgreSQL database.",
                             style={'color': 'green', 'font-weight': 'bold', 'font-size': 'large'})
     no_output = html.Plaintext("", style={'pading': ''})
@@ -500,10 +601,22 @@ def df_to_db(n_clicks, n_intervals, dataset, s):
     input_triggered = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
 
     if input_triggered == "save_to_postgres":
+        old_table_name = f'{input_dd}'
+        tbl_name = old_table_name.split('_')[0]
+        last_number = old_table_name.split('_')[-1]
+        inc_number = int(last_number) if last_number else 0
+        print(inc_number)
         s = 6
         pg = pd.DataFrame(dataset)
-        pg.to_sql('hastaveri', con=db.engine, if_exists='replace', index=False)
+        table_name = f'{tbl_name}_{inc_number + 1}'
+        #
+        print(table_name)
+        pg.to_sql(f'{table_name}', con=db.engine, if_exists='fail', index=False)
         return output, s
+        # s = 6
+        # pg = pd.DataFrame(dataset)
+        # pg.to_sql('hastaveri', con=db.engine, if_exists='replace', index=False)
+        # return output, s
     elif input_triggered == 'interval' and s > 0:
         s = s - 1
         if s > 0:
@@ -512,6 +625,41 @@ def df_to_db(n_clicks, n_intervals, dataset, s):
             return no_output, s
     elif s == 0:
         return no_output, s
+
+
+# callback for deleting from database
+@app.callback(
+    [
+        Output('delete_placeholder', 'children')
+    ],
+    [
+        Input('dd_input', 'value'),
+        Input('delete_from_db', 'n_clicks')
+    ],
+    prevent_initial_call=True)
+def delete_from_db(input_dd, n_clicks, ):
+    output = html.Plaintext("Tablo veri tabanindan basariyla silindi.",
+                            style={'color': 'red', 'font-weight': 'bold', 'font-size': 'large'})
+    no_output = html.Plaintext("", style={'margin': "0px"})
+
+    input_triggered2 = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+
+    if input_triggered2 == "delete_from_db":
+        db.session.execute("DROP TABLE IF EXISTS "f"{input_dd}"" CASCADE")
+        db.session.commit()
+        return [output]
+    else:
+        return [no_output]
+
+
+# callback for selecting table name from  db
+@app.callback(
+    Output('dd_input', 'options'),
+    Input('interval', 'n_intervals'))
+def update_dd_value(n_intervals):
+    query = db.session.execute("select tables.table_name from information_schema.tables where table_schema='public'")
+    names = [row[0] for row in query]
+    return names
 
 
 # callback for scatter-matrix with dd
@@ -647,12 +795,9 @@ def update_dd_value(data):
 )
 def ml_train_display(data, x_ml, y_ml, model_name):
     dff = pd.DataFrame(data)
-
     # converting datas from object to numeric
     convert_df = dff._convert(numeric=True)
-
     num_data = convert_df._get_numeric_data()
-
     x_val = convert_df[x_ml].values[:, None]
     target_data = convert_df[y_ml]
 
@@ -792,9 +937,10 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
     convert_df = dff._convert(numeric=True)
     numeric_data = convert_df.select_dtypes(include=np.number)
     del numeric_data['OUTPUT']
+    numeric_data = np.nan_to_num(numeric_data)
     targetData = np.nan_to_num(convert_df['OUTPUT'])
 
-    # targetData= np.nan_to_num(targetData)
+    # targetData= np.nan_to_num(targetData)ahaa
 
     # reset button click state
     changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
@@ -822,14 +968,19 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         SVMprediction = svcclassifier.predict(SVMnewTestData)
-
-        # Yeni datanin tahmini sonuclandirmak
-        if SVMprediction[:] == 1:
-            return "DIPPER"
-        elif SVMprediction[:] == 2:
-            return "NON-DIPPER"
+        SVM_pred_data = convert_df[convert_df['OUTPUT'] == SVMprediction]['SONUC'].iloc[0]
+        if SVM_pred_data:
+            return SVM_pred_data
         else:
             return "NaN"
+
+        # # Yeni datanin tahmini sonuclandirmak
+        # if SVMprediction[:] == 1:
+        #     return "DIPPER"
+        # elif SVMprediction[:] == 2:
+        #     return "NON-DIPPER"
+        # else:
+        #     return "NaN"
 
         # return algthPredict
 
@@ -862,14 +1013,19 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         model_ANN_prediction = model_ANN.predict(ann_newTestData)
-
-        # Yeni datanin tahmini sonuclandirmak
-        if model_ANN_prediction[:] == 1:
-            return "DIPPER"
-        elif model_ANN_prediction[:] == 2:
-            return "NON-DIPPER"
+        ANN_pred_data = convert_df[convert_df['OUTPUT'] == model_ANN_prediction]['SONUC'].iloc[0]
+        if ANN_pred_data:
+            return ANN_pred_data
         else:
             return "NaN"
+
+        # # Yeni datanin tahmini sonuclandirmak
+        # if model_ANN_prediction[:] == 1:
+        #     return "DIPPER"
+        # elif model_ANN_prediction[:] == 2:
+        #     return "NON-DIPPER"
+        # else:
+        #     return "NaN"
 
     elif ml_selection == 'k-NN' and 'ml_pred_start' in changed_id:
         knn_numeric_data_train, knn_numeric_data_test, knn_target_data_train, knn_target_data_test = train_test_split(
@@ -902,14 +1058,19 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         knn_prediction = knn_model.predict(knn_newTestData)
-
-        # Yeni datanin tahmini sonuclandirmak
-        if knn_prediction[:] == 1:
-            return "DIPPER"
-        elif knn_prediction[:] == 2:
-            return "NON-DIPPER"
+        KNN_pred_data = convert_df[convert_df['OUTPUT'] == knn_prediction]['SONUC'].iloc[0]
+        if KNN_pred_data:
+            return KNN_pred_data
         else:
             return "NaN"
+
+        # Yeni datanin tahmini sonuclandirmak
+        # if knn_prediction[:] == 1:
+        #     return "DIPPER"
+        # elif knn_prediction[:] == 2:
+        #     return "NON-DIPPER"
+        # else:
+        #     return "NaN"
 
     elif ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id:
         d_tree_numeric_data_train, d_tree_numeric_data_test, d_tree_target_data_train, d_tree_target_data_test = train_test_split(
@@ -942,14 +1103,19 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         d_tree_prediction = d_tree_classifier.predict(d_tree_newTestData)
-
-        # Yeni datanin tahmini sonuclandirmak
-        if d_tree_prediction[:] == 1:
-            return "DIPPER"
-        elif d_tree_prediction[:] == 2:
-            return "NON-DIPPER"
+        d_tree_pred_data = convert_df[convert_df['OUTPUT'] == d_tree_prediction]['SONUC'].iloc[0]
+        if d_tree_pred_data:
+            return d_tree_pred_data
         else:
             return "NaN"
+
+        # Yeni datanin tahmini sonuclandirmak
+        # if d_tree_prediction[:] == 1:
+        #     return "DIPPER"
+        # elif d_tree_prediction[:] == 2:
+        #     return "NON-DIPPER"
+        # else:
+        #     return "NaN"
 
     elif ml_selection == 'Naive Bayes' and 'ml_pred_start' in changed_id:
         naiveB_numeric_data_train, naiveB_numeric_data_test, naiveB_target_data_train, naiveB_target_data_test = train_test_split(
@@ -978,15 +1144,19 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         naiveB_prediction = naiveB_classifier.predict(naiveB_newTestData)
-        print(naiveB_prediction)
-
-        # Yeni datanin tahmini sonuclandirmak
-        if naiveB_prediction[:] == 1:
-            return "DIPPER"
-        elif naiveB_prediction[:] == 2:
-            return "NON-DIPPER"
+        naiveB_pred_data = convert_df[convert_df['OUTPUT'] == naiveB_prediction]['SONUC'].iloc[0]
+        if naiveB_pred_data:
+            return naiveB_pred_data
         else:
             return "NaN"
+
+        # Yeni datanin tahmini sonuclandirmak
+        # if naiveB_prediction[:] == 1:
+        #     return "DIPPER"
+        # elif naiveB_prediction[:] == 2:
+        #     return "NON-DIPPER"
+        # else:
+        #     return "NaN"
 
     elif ml_selection == 'CatBoost' and 'ml_pred_start' in changed_id:
         CatBoost_numeric_data_train, CatBoost_numeric_data_test, CatBoost_target_data_train, CatBoost_target_data_test = train_test_split(
@@ -1019,14 +1189,19 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
         # Yeni datanin tahmini yapma
         CatBoost_prediction = CatBoost_classifier.predict(new_numeric_data)
-
-        # Yeni datanin tahmini sonuclandirmak
-        if CatBoost_prediction[:] == 1:
-            return "DIPPER"
-        elif CatBoost_prediction[:] == 2:
-            return "NON-DIPPER"
+        CatBoost_pred_data = convert_df[convert_df['OUTPUT'] == CatBoost_prediction]['SONUC'].iloc[0]
+        if CatBoost_pred_data:
+            return CatBoost_pred_data
         else:
             return "NaN"
+
+        # Yeni datanin tahmini sonuclandirmak
+        # if CatBoost_prediction[:] == 1:
+        #     return "DIPPER"
+        # elif CatBoost_prediction[:] == 2:
+        #     return "NON-DIPPER"
+        # else:
+        #     return "NaN"
 
 
 # callback for model prediction result
@@ -1049,6 +1224,7 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
     convert_df = dff._convert(numeric=True)
     numeric_data = convert_df.select_dtypes(include=np.number)
     del numeric_data['OUTPUT']
+    numeric_data = np.nan_to_num(numeric_data)
     targetData = np.nan_to_num(convert_df['OUTPUT'])
 
     # targetData= np.nan_to_num(targetData)

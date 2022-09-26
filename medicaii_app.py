@@ -341,10 +341,10 @@ app.layout = html.Div([
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.Label("k-means clustering"),
+                                html.Label("K-MEANS Clustering"),
                                 dbc.Row([
                                     dbc.Col([
-                                        dbc.Label("X variable"),
+                                        # dbc.Label("X variable"),
                                         dcc.Dropdown(
                                             id="xk-variable",
                                             value="",
@@ -353,7 +353,7 @@ app.layout = html.Div([
                                         ),
                                     ]),
                                     dbc.Col([
-                                        dbc.Label("Y variable"),
+                                        # dbc.Label("Y variable"),
                                         dcc.Dropdown(
                                             id="yk-variable",
                                             value="",
@@ -453,7 +453,7 @@ def parse_contents(contents, filename):
 
     return html.Div(children=[
         dbc.Alert(
-            filename + " isimli dosya basariyla kaydedildi",
+            filename + " isimli dosya basariyla yuklendi",
             color="success",
             is_open=True,
             duration=4000,

@@ -146,7 +146,6 @@ app.layout = html.Div([
                             dcc.Dropdown(
                                 id='dd_input',
                                 placeholder='Select a table',
-                                options=["1", "2"],
                                 value='',
                                 persistence=True,
                                 style={"display": "inline-block", "width": "200px", "top": "15px"}
@@ -218,7 +217,7 @@ app.layout = html.Div([
                                 html.Br(),
                                 dbc.Row([
                                     dbc.Col([
-                                        html.P("Sonuc:"),
+                                        html.P("SONUC:"),
                                     ]),
                                     dbc.Col([
                                         dcc.Input(id='ml_model_pred', type='text', disabled=True),
@@ -236,7 +235,7 @@ app.layout = html.Div([
                 dbc.Row([
                     dbc.Card([
                         dbc.CardBody([
-                            dbc.Button('Model Tahmin Sonuclari', id='model_pred_roc', style={'padding': 10}),
+                            dbc.Button('Model Tahmin SONUClari', id='model_pred_roc', style={'padding': 10}),
                         ])
                     ], className='text-center'),
                 ], className='pt-2'),
@@ -344,7 +343,7 @@ app.layout = html.Div([
                                 html.Label("K-MEANS Clustering"),
                                 dbc.Row([
                                     dbc.Col([
-                                        # dbc.Label("X variable"),
+                                        dbc.Label(" "),
                                         dcc.Dropdown(
                                             id="xk-variable",
                                             value="",
@@ -353,7 +352,7 @@ app.layout = html.Div([
                                         ),
                                     ]),
                                     dbc.Col([
-                                        # dbc.Label("Y variable"),
+                                        dbc.Label(" "),
                                         dcc.Dropdown(
                                             id="yk-variable",
                                             value="",
@@ -539,6 +538,18 @@ def populate_datatable(dd_input, n_intervals):
             style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
             page_size=15,
             export_format='xlsx',
+            style_data_conditional=(
+                [
+                    {
+                        'if': {
+                            'filter_query': '{{{}}} is blank'.format(col),
+                            'column_id': col
+                        },
+                        'backgroundColor': 'tomato',
+                        'color': 'white'
+                    } for col in df.columns
+                ]
+            )
         ),
     ]
 
@@ -974,7 +985,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         else:
             return "NaN"
 
-        # # Yeni datanin tahmini sonuclandirmak
+        # # Yeni datanin tahmini SONUClandirmak
         # if SVMprediction[:] == 1:
         #     return "DIPPER"
         # elif SVMprediction[:] == 2:
@@ -1568,7 +1579,7 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
 
 
 if __name__ == '__main__':
-    # app.run_server(debug=True, use_reloader=False, port=4000)
-    app.run_server(debug=True, port=4000)
+    app.run_server(debug=True, use_reloader=False)
+    # app.run_server(debug=True)
 
 # Not: Linear Regresion Prediction has problems, will return back and see more in the documentation

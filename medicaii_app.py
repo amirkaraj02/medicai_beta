@@ -61,11 +61,8 @@ auth = dash_auth.BasicAuth(
 # app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:amir02@localhost/medicAI_app_test"
 
 # connection string for live database on heroku
-# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgres://tctazcptsemgbx:f5571aba7ec0ee16ba3daa04037580d825844d2a0bdade4224fe3295dfd4d7c5@ec2-54-228-32-29.eu-west-1.compute.amazonaws.com:5432/db8f6qmenvsgf2"
-# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
 app.server.config[
-    # "SQLALCHEMY_DATABASE_URI"] = "postgresql://evfjbosb:RJzpZoiQ3EmojPvg-NI4Q8IrwLMTQNSl@ella.db.elephantsql.com/evfjbosb"
-    "SQLALCHEMY_DATABASE_URI"] = "postgresql://mytclvdpxqptvm:b4d90ca9ae7b69dca61832c9bdc2df8580e1f4e43e3073100cde3d6c935380f9@ec2-34-200-205-45.compute-1.amazonaws.com:5432/deei4r7pfa937t"
+    "SQLALCHEMY_DATABASE_URI"] = "postgresql://evtexvmmrvqyrw:8a14fa5b8009cc2125cc8ea65101556eb5cb6e3379a79cb6e281f183f0a88e49@ec2-34-231-42-166.compute-1.amazonaws.com:5432/d3k83j4dfdj09o"
 db = SQLAlchemy(app.server)
 
 # ---------------------------------------------------------------------------------

@@ -11,6 +11,7 @@ import dash_auth
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.figure_factory as ff
 import numpy as np
 
 from flask_sqlalchemy import SQLAlchemy
@@ -232,7 +233,7 @@ app.layout = html.Div([
                 dbc.Row([
                     dbc.Card([
                         dbc.CardBody([
-                            dbc.Button('Model Tahmin SONUClari', id='model_pred_roc', style={'padding': 10}),
+                            dbc.Button('Model Tahmin Sonuclari', id='model_pred_roc', style={'padding': 10}),
                         ])
                     ], className='text-center'),
                 ], className='pt-2'),
@@ -240,7 +241,18 @@ app.layout = html.Div([
             dbc.Col([
                 dbc.Card([
                     dbc.CardBody([
-                        html.Label('Scatter matrix kullanarak data analisi yapmak:'),
+                        dbc.Row([
+                            dbc.Col([html.Label("Matrix Plot Grafikleri:")]),
+                            dbc.Col([
+                                dcc.Dropdown(
+                                    id='select_matrix',
+                                    options=["Scatter", "Histogram", "Box"],
+                                    value='Scatter',
+                                    persistence=True,
+                                    persistence_type='session',
+                                )]),
+                        ]),
+                        html.Br(),
                         dcc.Dropdown(
                             id='scatter_matrix_dropdown',
                             value='',
@@ -248,7 +260,43 @@ app.layout = html.Div([
                             persistence=True,
                             persistence_type='session',
                         ),
-                        dcc.Graph(id="Graff_scatter_matrix"),
+                        dcc.Loading(dcc.Graph(id="Graff_scatter_matrix", animate=False), type="dot"),
+                        dbc.Button("Matrix graphs", id="open-xl", n_clicks=0),
+                        dbc.Modal(
+                            [
+                                dbc.Card([
+                                    dbc.CardBody([
+                                        dbc.Row([
+                                            dbc.Col([html.Label("Matrix Plot Grafikleri:")]),
+                                            dbc.Col([
+                                                dcc.Dropdown(
+                                                    id='modal_select_matrix',
+                                                    options=["Scatter", "Histogram", "Box"],
+                                                    value='Scatter',
+                                                    persistence=True,
+                                                    persistence_type='session',
+                                                )]),
+                                        ]),
+                                        html.Br(),
+                                        dcc.Dropdown(
+                                            id='modal_scatter_matrix_dropdown',
+                                            value='',
+                                            multi=True,
+                                            persistence=True,
+                                            persistence_type='session',
+                                        ),
+                                        dcc.Loading(dcc.Graph(id="modal_Graff_scatter_matrix", animate=False),
+                                                    type="cube"),
+                                    ]),
+                                ]),
+                                dbc.ModalFooter(dbc.Button("Close", id="close-dismiss")),
+                            ],
+                            id="modal-xl",
+                            keyboard=False,
+                            backdrop="static",
+                            size="xl",
+                            is_open=False,
+                        ),
                     ])
                 ], className='h-100 text-center')
             ], xs=5),
@@ -256,7 +304,7 @@ app.layout = html.Div([
                 dbc.Card([
                     dbc.CardBody([
                         dbc.Row([
-                            dbc.Col([html.Label("Grafikler:")]),
+                            dbc.Col([html.Label("Grafik Secimi:")]),
                             dbc.Col([
                                 dcc.Dropdown(
                                     id='selection',
@@ -358,7 +406,7 @@ app.layout = html.Div([
                                         ),
                                     ]),
                                     dbc.Col([
-                                        dbc.Label("Cluster count"),
+                                        dbc.Label("Cluster Sayisi"),
                                         dbc.Input(id="cluster-count", type="number", value=3),
                                     ]),
                                 ]),
@@ -378,9 +426,9 @@ app.layout = html.Div([
                         dbc.Col([
                             dbc.Card([
                                 dbc.CardBody([
-                                    html.P('Classification Report Sonuclari'),
+                                    html.P('Classification Report'),
                                     html.Div(id="ml_model_pred_result"),
-                                    html.P('Confusion Matrix Sonuclari'),
+                                    html.P('Confusion Matrix'),
                                     dcc.Graph(id="ml_model_confusion_matrix"),
                                 ])
                             ], className='h-100 text-center')
@@ -388,7 +436,7 @@ app.layout = html.Div([
                         dbc.Col([
                             dbc.Card([
                                 dbc.CardBody([
-                                    html.P('ROC and PR Curves Graphs'),
+                                    html.P('ROC and PR Curves'),
                                     dcc.Graph(id="roc-curve-model", figure={})
 
                                 ], className='h-100 text-center')
@@ -401,7 +449,7 @@ app.layout = html.Div([
 
     ])
 
-],
+]
 )
 
 
@@ -494,6 +542,20 @@ def toggle_collapse(n, is_open):
               [State('model_pred', 'is_open')])
 def toggle_collapse(n, is_open):
     if n:
+        return not is_open
+    return is_open
+
+
+@app.callback(
+    Output("modal-xl", "is_open"),
+    [
+        Input("open-xl", "n_clicks"),
+        Input("close-dismiss", "n_clicks")
+    ],
+    State("modal-xl", "is_open"),
+)
+def toggle_modal(n_open, n_close, is_open):
+    if n_open or n_close:
         return not is_open
     return is_open
 
@@ -613,7 +675,6 @@ def df_to_db(input_dd, n_clicks, n_intervals, dataset, s):
         tbl_name = old_table_name.split('_')[0]
         last_number = old_table_name.split('_')[-1]
         inc_number = int(last_number) if last_number else 0
-        print(inc_number)
         s = 6
         pg = pd.DataFrame(dataset)
         table_name = f'{tbl_name}_{inc_number + 1}'
@@ -673,15 +734,47 @@ def update_dd_value(n_intervals):
 # callback for scatter-matrix with dd
 @app.callback(
     Output("Graff_scatter_matrix", "figure"),
+    Input("select_matrix", "value"),
     Input("scatter_matrix_dropdown", "value"),
     State('our-table', 'data'),
     prevent_initial_call=True
 )
-def update_bar_chart(dims, data):
+def update_bar_chart(dd_select, dims, data):
     df_colName = pd.DataFrame(data)
-    fig = px.scatter_matrix(df_colName,
-                            dimensions=dims)  # if we want to open first with a color value --> color=df.columns[2])
-    return fig
+    df = df_colName[dims] if dims else df_colName
+
+    animations = {
+        'Scatter': ff.create_scatterplotmatrix(df, diag='scatter', height=500, width=600),
+        'Histogram': ff.create_scatterplotmatrix(df, diag='histogram', width=600),
+        'Box': ff.create_scatterplotmatrix(df, diag='box', width=600)
+    }
+    return animations[dd_select]
+    # fig = px.scatter_matrix(df_colName,
+    #                         dimensions=dims, color="SONUC",
+    #                         symbol="SONUC")  # if we want to open first with a color value --> color=df.columns[2])
+    # fig = ff.create_scatterplotmatrix(df, diag='histogram')
+
+    # return fig
+
+
+# callback for modal scatter-matrix with dd
+@app.callback(
+    Output("modal_Graff_scatter_matrix", "figure"),
+    Input("modal_select_matrix", "value"),
+    Input("modal_scatter_matrix_dropdown", "value"),
+    State('our-table', 'data'),
+    prevent_initial_call=True
+)
+def update_bar_chart(modal_dd_select, modal_dims, modal_data):
+    modal_df_colName = pd.DataFrame(modal_data)
+    modal_dff = modal_df_colName[modal_dims] if modal_dims else modal_df_colName
+
+    animations = {
+        'Scatter': ff.create_scatterplotmatrix(modal_dff, diag='scatter', height=1000, width=1000),
+        'Histogram': ff.create_scatterplotmatrix(modal_dff, diag='histogram', height=1000, width=1000),
+        'Box': ff.create_scatterplotmatrix(modal_dff, diag='box', height=1000, width=1000)
+    }
+    return animations[modal_dd_select]
 
 
 # callback for multi-graph
@@ -694,26 +787,18 @@ def update_bar_chart(dims, data):
     prevent_initial_call=True)
 def display_animated_graph(selection, x_var, y_var, data):
     df_multi = pd.DataFrame(data)
-    # multi_fig = make_subplots(rows=1, cols=2)
-    # multi_fig.add_trace(go.Scatter(x=df_multi["ALT"], y=df_multi["OUTPUT"], mode="lines"), row=1, col=1)
-    # multi_fig.add_trace(go.Bar(x=df_multi["Gender"], y=df_multi["OUTPUT"]), row=1, col=2)
     animations = {
-        'Scatter': px.scatter(df_multi, x=x_var, y=y_var),
+        'Scatter': px.scatter(df_multi, x=x_var, y=y_var, color="SONUC", symbol="SONUC"),
 
-        'Bar': px.bar(df_multi, x=x_var, y=y_var, barmode="group"),
+        'Bar': px.bar(df_multi, x=x_var, y=y_var, color="SONUC", hover_data=df_multi.columns),
 
         'Histogram': px.histogram(df_multi, x=x_var, y=y_var, color="SONUC", marginal="rug",
                                   hover_data=df_multi.columns),
+
         'Box': px.box(df_multi, x=x_var, y=y_var, color="SONUC", notched=True),
+
         'Violin': px.violin(df_multi, x=x_var, y=y_var, color="SONUC", box=True, points='all',
                             hover_data=df_multi.columns),
-        # 'Go_Scatter': px.scatter(df_multi, x="RBC", y="HGB", color="DISEASE"),
-        # 'Go_Scatter': multi_fig,
-        # 'Go_Scatter': go.Scatter(x=df_multi.columns[x], y=df_multi.columns[y], mode="markers", marker={"size": 8})
-        # 'Go_Scatter': px.scatter(df_multi, x=x_var, y=y_var)
-        # 'Go_Scatter': px.histogram(
-        #     df_multi,  x="RBC", y="HGB", color="DISEASE", range_x=[-5, 60],
-        #     hover_data=df_multi.columns)
     }
     return animations[selection]
 
@@ -726,6 +811,15 @@ def display_animated_graph(selection, x_var, y_var, data):
 def update_dd_value(data):
     df_multi = pd.DataFrame(data)
     return [{"label": i, "value": i} for i in df_multi.columns]
+
+# callback for updating modal dropdown
+@app.callback(
+    Output("modal_scatter_matrix_dropdown", "options"),
+    Input('our-table', 'data'),
+    prevent_initial_call=True)
+def update_dd_value(modal_data):
+    modal_df_multi = pd.DataFrame(modal_data)
+    return [{"label": i, "value": i} for i in modal_df_multi.columns]
 
 
 # callback for column number
@@ -953,263 +1047,239 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
     # reset button click state
     changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
 
-    if ml_selection == 'SVM' and 'ml_pred_start' in changed_id:
-        SVMnumeric_data_train, SVMnumeric_data_test, SVMtarget_data_train, SVMtarget_data_test = train_test_split(
-            numeric_data, targetData, test_size=0.30)
-        scaler = StandardScaler()
-        scaler.fit(SVMnumeric_data_train)
+    if ml_selection == 'SVM':
+        if 'ml_pred_start' in changed_id:
+            SVMnumeric_data_train, SVMnumeric_data_test, SVMtarget_data_train, SVMtarget_data_test = train_test_split(
+                numeric_data, targetData, test_size=0.30)
+            scaler = StandardScaler()
+            scaler.fit(SVMnumeric_data_train)
 
-        SVMnumeric_data_train = scaler.transform(SVMnumeric_data_train)
-        SVMnumeric_data_test = scaler.transform(SVMnumeric_data_test)
-        svcclassifier = SVC(kernel='poly', degree=3)
-        svcclassifier.fit(SVMnumeric_data_train, SVMtarget_data_train)
+            SVMnumeric_data_train = scaler.transform(SVMnumeric_data_train)
+            SVMnumeric_data_test = scaler.transform(SVMnumeric_data_test)
+            svcclassifier = SVC(kernel='poly', degree=3)
+            svcclassifier.fit(SVMnumeric_data_train, SVMtarget_data_train)
 
-        # Selected row prediction matrix
-        sel_row = [data[i] for i in selected_rows]
-        dff_sel_row = pd.DataFrame(sel_row)
-        dff_sel_non_nan = dff_sel_row.fillna(0)
-        convert_df = dff_sel_non_nan._convert(numeric=True)
-        new_numeric_data = convert_df.select_dtypes(include=np.number)
-        del new_numeric_data['OUTPUT']
+            # Selected row prediction matrix
+            select_a_row = [data[i] for i in selected_rows]
+            dff_sel_row = pd.DataFrame(select_a_row)
+            dff_sel_non_nan = dff_sel_row.fillna(0)
+            selected_row_converted_df = dff_sel_non_nan._convert(numeric=True)
+            new_numeric_data = selected_row_converted_df.select_dtypes(include=np.number)
+            # del new_numeric_data['OUTPUT']
+            if 'OUTPUT' in new_numeric_data.columns:
+                del new_numeric_data['OUTPUT']
 
-        SVMnewTestData = scaler.transform(new_numeric_data)
+            SVMnewTestData = scaler.transform(new_numeric_data)
 
-        # Yeni datanin tahmini yapma
-        SVMprediction = svcclassifier.predict(SVMnewTestData)
-        SVM_pred_data = convert_df[convert_df['OUTPUT'] == SVMprediction]['SONUC'].iloc[0]
-        if SVM_pred_data:
-            return SVM_pred_data
-        else:
-            return "NaN"
+            # Yeni datanin tahmini yapma
+            SVMprediction = svcclassifier.predict(SVMnewTestData)
+            print("SVMprediction", SVMprediction)
+            SVM_pred_data = convert_df[convert_df['OUTPUT'] == SVMprediction[0]]['SONUC'].iloc[0]
+            print("SVM_pred_data", SVM_pred_data)
 
-        # # Yeni datanin tahmini SONUClandirmak
-        # if SVMprediction[:] == 1:
-        #     return "DIPPER"
-        # elif SVMprediction[:] == 2:
-        #     return "NON-DIPPER"
-        # else:
-        #     return "NaN"
+            if SVM_pred_data:
+                return SVM_pred_data
+            else:
+                return "NaN"
 
-        # return algthPredict
+        return ""
 
 
-    elif ml_selection == 'ANN' and 'ml_pred_start' in changed_id:
-        ANN_numeric_data_train, ANN_numeric_data_test, ANN_target_data_train, ANN_target_data_test = train_test_split(
-            numeric_data, targetData, test_size=0.30)
 
-        scaler = StandardScaler()
-        scaler.fit(ANN_numeric_data_train)
+    elif ml_selection == 'ANN':
+        if 'ml_pred_start' in changed_id:
+            ANN_numeric_data_train, ANN_numeric_data_test, ANN_target_data_train, ANN_target_data_test = train_test_split(
+                numeric_data, targetData, test_size=0.30)
 
-        ANN_numeric_data_train = scaler.transform(ANN_numeric_data_train)
-        ANN_numeric_data_test = scaler.transform(ANN_numeric_data_test)
+            scaler = StandardScaler()
+            scaler.fit(ANN_numeric_data_train)
 
-        mlp = MLPClassifier(hidden_layer_sizes=(50, 50, 50))
-        model_ANN = mlp.fit(ANN_numeric_data_train, ANN_target_data_train)
+            ANN_numeric_data_train = scaler.transform(ANN_numeric_data_train)
+            ANN_numeric_data_test = scaler.transform(ANN_numeric_data_test)
 
-        pred = model_ANN.predict(ANN_numeric_data_test)
+            mlp = MLPClassifier(hidden_layer_sizes=(50, 50, 50))
+            model_ANN = mlp.fit(ANN_numeric_data_train, ANN_target_data_train)
 
-        # Selected row prediction matrix
-        sel_row = [data[i] for i in selected_rows]
-        dff_sel_row = pd.DataFrame(sel_row)
-        dff_sel_non_nan = dff_sel_row.fillna(0)
-        convert_df = dff_sel_non_nan._convert(numeric=True)
-        new_numeric_data = convert_df.select_dtypes(include=np.number)
-        print("before:", new_numeric_data)
-        del new_numeric_data['OUTPUT']
+            pred = model_ANN.predict(ANN_numeric_data_test)
 
-        ann_newTestData = scaler.transform(new_numeric_data)
+            # Selected row prediction matrix
+            select_a_row = [data[i] for i in selected_rows]
+            dff_sel_row = pd.DataFrame(select_a_row)
+            dff_sel_non_nan = dff_sel_row.fillna(0)
+            selected_row_converted_df = dff_sel_non_nan._convert(numeric=True)
+            new_numeric_data = selected_row_converted_df.select_dtypes(include=np.number)
+            if 'OUTPUT' in new_numeric_data.columns:
+                del new_numeric_data['OUTPUT']
 
-        # Yeni datanin tahmini yapma
-        model_ANN_prediction = model_ANN.predict(ann_newTestData)
-        ANN_pred_data = convert_df[convert_df['OUTPUT'] == model_ANN_prediction]['SONUC'].iloc[0]
-        if ANN_pred_data:
-            return ANN_pred_data
-        else:
-            return "NaN"
+            ann_newTestData = scaler.transform(new_numeric_data)
 
-        # # Yeni datanin tahmini sonuclandirmak
-        # if model_ANN_prediction[:] == 1:
-        #     return "DIPPER"
-        # elif model_ANN_prediction[:] == 2:
-        #     return "NON-DIPPER"
-        # else:
-        #     return "NaN"
+            # Yeni datanin tahmini yapma
+            model_ANN_prediction = model_ANN.predict(ann_newTestData)
+            ANN_pred_data = convert_df[convert_df['OUTPUT'] == model_ANN_prediction[0]]['SONUC'].iloc[0]
+            if ANN_pred_data:
+                return ANN_pred_data
+            else:
+                return "NaN"
 
-    elif ml_selection == 'k-NN' and 'ml_pred_start' in changed_id:
-        knn_numeric_data_train, knn_numeric_data_test, knn_target_data_train, knn_target_data_test = train_test_split(
-            numeric_data, targetData, test_size=0.30)
-        scaler = StandardScaler()
-        scaler.fit(knn_numeric_data_train)
+        return ""
 
-        knn_numeric_data_train = scaler.transform(knn_numeric_data_train)
-        knn_numeric_data_test = scaler.transform(knn_numeric_data_test)
+    elif ml_selection == 'k-NN':
+        if 'ml_pred_start' in changed_id:
+            knn_numeric_data_train, knn_numeric_data_test, knn_target_data_train, knn_target_data_test = train_test_split(
+                numeric_data, targetData, test_size=0.30)
+            scaler = StandardScaler()
+            scaler.fit(knn_numeric_data_train)
 
-        knn_model = KNeighborsClassifier(n_neighbors=3)
+            knn_numeric_data_train = scaler.transform(knn_numeric_data_train)
+            knn_numeric_data_test = scaler.transform(knn_numeric_data_test)
 
-        knn_model.fit(knn_numeric_data_train, knn_target_data_train)
+            knn_model = KNeighborsClassifier(n_neighbors=3)
 
-        algthPredict = knn_model.predict(knn_numeric_data_test)
+            knn_model.fit(knn_numeric_data_train, knn_target_data_train)
 
-        # print(confusion_matrix(SVMtarget_data_test, algthPredict))
-        #
-        # print(classification_report(SVMtarget_data_test, algthPredict))
+            # Selected row prediction matrix
+            select_a_row = [data[i] for i in selected_rows]
+            dff_sel_row = pd.DataFrame(select_a_row)
+            dff_sel_non_nan = dff_sel_row.fillna(0)
+            selected_row_converted_df = dff_sel_non_nan._convert(numeric=True)
+            new_numeric_data = selected_row_converted_df.select_dtypes(include=np.number)
+            if 'OUTPUT' in new_numeric_data.columns:
+                del new_numeric_data['OUTPUT']
 
-        # Selected row prediction matrix
-        sel_row = [data[i] for i in selected_rows]
-        dff_sel_row = pd.DataFrame(sel_row)
-        dff_sel_non_nan = dff_sel_row.fillna(0)
-        convert_df = dff_sel_non_nan._convert(numeric=True)
-        new_numeric_data = convert_df.select_dtypes(include=np.number)
-        del new_numeric_data['OUTPUT']
+            knn_newTestData = scaler.transform(new_numeric_data)
 
-        knn_newTestData = scaler.transform(new_numeric_data)
+            # Yeni datanin tahmini yapma
+            knn_prediction = knn_model.predict(knn_newTestData)
+            KNN_pred_data = convert_df[convert_df['OUTPUT'] == knn_prediction[0]]['SONUC'].iloc[0]
+            if KNN_pred_data:
+                return KNN_pred_data
+            else:
+                return "NaN"
 
-        # Yeni datanin tahmini yapma
-        knn_prediction = knn_model.predict(knn_newTestData)
-        KNN_pred_data = convert_df[convert_df['OUTPUT'] == knn_prediction]['SONUC'].iloc[0]
-        if KNN_pred_data:
-            return KNN_pred_data
-        else:
-            return "NaN"
+        return ""
 
-        # Yeni datanin tahmini sonuclandirmak
-        # if knn_prediction[:] == 1:
-        #     return "DIPPER"
-        # elif knn_prediction[:] == 2:
-        #     return "NON-DIPPER"
-        # else:
-        #     return "NaN"
+    elif ml_selection == 'Decision Tree':
+        if 'ml_pred_start' in changed_id:
+            d_tree_numeric_data_train, d_tree_numeric_data_test, d_tree_target_data_train, d_tree_target_data_test = train_test_split(
+                numeric_data, targetData, test_size=0.30)
+            scaler = StandardScaler()
+            scaler.fit(d_tree_numeric_data_train)
 
-    elif ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id:
-        d_tree_numeric_data_train, d_tree_numeric_data_test, d_tree_target_data_train, d_tree_target_data_test = train_test_split(
-            numeric_data, targetData, test_size=0.30)
-        scaler = StandardScaler()
-        scaler.fit(d_tree_numeric_data_train)
+            knn_numeric_data_train = scaler.transform(d_tree_numeric_data_train)
+            knn_numeric_data_test = scaler.transform(d_tree_numeric_data_test)
 
-        knn_numeric_data_train = scaler.transform(d_tree_numeric_data_train)
-        knn_numeric_data_test = scaler.transform(d_tree_numeric_data_test)
+            d_tree_classifier = DecisionTreeClassifier(criterion='entropy', random_state=0)
+            # d_tree_classifier = DecisionTreeClassifier(class_weight=None, criterion='entropy', max_depth=None,
+            #                                            max_features=None, max_leaf_nodes=None,
+            #                                            min_impurity_decrease=0.0, min_impurity_split=None,
+            #                                            min_samples_leaf=1, min_samples_split=2,
+            #                                            min_weight_fraction_leaf=0.0, presort=False,
+            #                                            random_state=0, splitter='best')
 
-        d_tree_classifier = DecisionTreeClassifier(criterion='entropy', random_state=0)
-        # d_tree_classifier = DecisionTreeClassifier(class_weight=None, criterion='entropy', max_depth=None,
-        #                                            max_features=None, max_leaf_nodes=None,
-        #                                            min_impurity_decrease=0.0, min_impurity_split=None,
-        #                                            min_samples_leaf=1, min_samples_split=2,
-        #                                            min_weight_fraction_leaf=0.0, presort=False,
-        #                                            random_state=0, splitter='best')
+            d_tree_classifier.fit(d_tree_numeric_data_train, d_tree_target_data_train)
 
-        d_tree_classifier.fit(d_tree_numeric_data_train, d_tree_target_data_train)
+            # Selected row prediction matrix
 
-        # Selected row prediction matrix
-        sel_row = [data[i] for i in selected_rows]
-        dff_sel_row = pd.DataFrame(sel_row)
-        dff_sel_non_nan = dff_sel_row.fillna(0)
-        convert_df = dff_sel_non_nan._convert(numeric=True)
-        new_numeric_data = convert_df.select_dtypes(include=np.number)
-        del new_numeric_data['OUTPUT']
+            select_a_row = [data[i] for i in selected_rows]
+            dff_sel_row = pd.DataFrame(select_a_row)
+            dff_sel_non_nan = dff_sel_row.fillna(0)
+            selected_row_converted_df = dff_sel_non_nan._convert(numeric=True)
+            new_numeric_data = selected_row_converted_df.select_dtypes(include=np.number)
 
-        d_tree_newTestData = scaler.transform(new_numeric_data)
+            if 'OUTPUT' in new_numeric_data.columns:
+                del new_numeric_data['OUTPUT']
 
-        # Yeni datanin tahmini yapma
-        d_tree_prediction = d_tree_classifier.predict(d_tree_newTestData)
-        d_tree_pred_data = convert_df[convert_df['OUTPUT'] == d_tree_prediction]['SONUC'].iloc[0]
-        if d_tree_pred_data:
-            return d_tree_pred_data
-        else:
-            return "NaN"
+            d_tree_newTestData = scaler.transform(new_numeric_data)
 
-        # Yeni datanin tahmini sonuclandirmak
-        # if d_tree_prediction[:] == 1:
-        #     return "DIPPER"
-        # elif d_tree_prediction[:] == 2:
-        #     return "NON-DIPPER"
-        # else:
-        #     return "NaN"
+            # Yeni datanin tahmini yapma
+            d_tree_prediction = d_tree_classifier.predict(d_tree_newTestData)
+            d_tree_pred_data = convert_df[convert_df['OUTPUT'] == d_tree_prediction[0]]['SONUC'].iloc[0]
+            if d_tree_pred_data:
+                return d_tree_pred_data
+            else:
+                return "NaN"
 
-    elif ml_selection == 'Naive Bayes' and 'ml_pred_start' in changed_id:
-        naiveB_numeric_data_train, naiveB_numeric_data_test, naiveB_target_data_train, naiveB_target_data_test = train_test_split(
-            numeric_data, targetData, test_size=0.30)
-        scaler = StandardScaler()
-        scaler.fit(naiveB_numeric_data_train)
+        return ""
 
-        naiveB_numeric_data_train = scaler.transform(naiveB_numeric_data_train)
-        naiveB_numeric_data_test = scaler.transform(naiveB_numeric_data_test)
+    elif ml_selection == 'Naive Bayes':
+        if 'ml_pred_start' in changed_id:
+            naiveB_numeric_data_train, naiveB_numeric_data_test, naiveB_target_data_train, naiveB_target_data_test = train_test_split(
+                numeric_data, targetData, test_size=0.30)
+            scaler = StandardScaler()
+            scaler.fit(naiveB_numeric_data_train)
 
-        naiveB_classifier = GaussianNB()
+            naiveB_numeric_data_train = scaler.transform(naiveB_numeric_data_train)
+            naiveB_numeric_data_test = scaler.transform(naiveB_numeric_data_test)
 
-        naiveB_classifier.fit(naiveB_numeric_data_train, naiveB_target_data_train)
+            naiveB_classifier = GaussianNB()
 
-        # y_pred = naiveB_classifier.predict(naiveB_numeric_data_test)
+            naiveB_classifier.fit(naiveB_numeric_data_train, naiveB_target_data_train)
 
-        # Selected row prediction matrix
-        sel_row = [data[i] for i in selected_rows]
-        dff_sel_row = pd.DataFrame(sel_row)
-        dff_sel_non_nan = dff_sel_row.fillna(0)
-        convert_df = dff_sel_non_nan._convert(numeric=True)
-        new_numeric_data = convert_df.select_dtypes(include=np.number)
-        del new_numeric_data['OUTPUT']
+            # y_pred = naiveB_classifier.predict(naiveB_numeric_data_test)
 
-        naiveB_newTestData = scaler.transform(new_numeric_data)
+            # Selected row prediction matrix
 
-        # Yeni datanin tahmini yapma
-        naiveB_prediction = naiveB_classifier.predict(naiveB_newTestData)
-        naiveB_pred_data = convert_df[convert_df['OUTPUT'] == naiveB_prediction]['SONUC'].iloc[0]
-        if naiveB_pred_data:
-            return naiveB_pred_data
-        else:
-            return "NaN"
+            select_a_row = [data[i] for i in selected_rows]
+            dff_sel_row = pd.DataFrame(select_a_row)
+            dff_sel_non_nan = dff_sel_row.fillna(0)
+            selected_row_converted_df = dff_sel_non_nan._convert(numeric=True)
+            new_numeric_data = selected_row_converted_df.select_dtypes(include=np.number)
+            if 'OUTPUT' in new_numeric_data.columns:
+                del new_numeric_data['OUTPUT']
 
-        # Yeni datanin tahmini sonuclandirmak
-        # if naiveB_prediction[:] == 1:
-        #     return "DIPPER"
-        # elif naiveB_prediction[:] == 2:
-        #     return "NON-DIPPER"
-        # else:
-        #     return "NaN"
+            naiveB_newTestData = scaler.transform(new_numeric_data)
 
-    elif ml_selection == 'CatBoost' and 'ml_pred_start' in changed_id:
-        CatBoost_numeric_data_train, CatBoost_numeric_data_test, CatBoost_target_data_train, CatBoost_target_data_test = train_test_split(
-            numeric_data, targetData, test_size=0.30)
-        # scaler = StandardScaler()
-        # scaler.fit(CatBoost_numeric_data_train)
+            # Yeni datanin tahmini yapma
+            naiveB_prediction = naiveB_classifier.predict(naiveB_newTestData)
+            naiveB_pred_data = convert_df[convert_df['OUTPUT'] == naiveB_prediction[0]]['SONUC'].iloc[0]
+            if naiveB_pred_data:
+                return naiveB_pred_data
+            else:
+                return "NaN"
 
-        # CatBoost_numeric_data_train = scaler.transform(CatBoost_numeric_data_train)
-        # CatBoost_numeric_data_test = scaler.transform(CatBoost_numeric_data_test)
+        return ""
 
-        CatBoost_classifier = CatBoostClassifier(
-            iterations=5,
-            learning_rate=0.1,
-            # loss_function='CrossEntropy'
-        )
+    elif ml_selection == 'CatBoost':
+        if 'ml_pred_start' in changed_id:
+            CatBoost_numeric_data_train, CatBoost_numeric_data_test, CatBoost_target_data_train, CatBoost_target_data_test = train_test_split(
+                numeric_data, targetData, test_size=0.30)
+            # scaler = StandardScaler()
+            # scaler.fit(CatBoost_numeric_data_train)
 
-        CatBoost_classifier.fit(CatBoost_numeric_data_train, CatBoost_target_data_train)
+            # CatBoost_numeric_data_train = scaler.transform(CatBoost_numeric_data_train)
+            # CatBoost_numeric_data_test = scaler.transform(CatBoost_numeric_data_test)
 
-        # y_pred = naiveB_classifier.predict(naiveB_numeric_data_test)
+            CatBoost_classifier = CatBoostClassifier(
+                iterations=5,
+                learning_rate=0.1,
+                # loss_function='CrossEntropy'
+            )
 
-        # Selected row prediction matrix
-        sel_row = [data[i] for i in selected_rows]
-        dff_sel_row = pd.DataFrame(sel_row)
-        dff_sel_non_nan = dff_sel_row.fillna(0)
-        convert_df = dff_sel_non_nan._convert(numeric=True)
-        new_numeric_data = convert_df.select_dtypes(include=np.number)
-        del new_numeric_data['OUTPUT']
+            CatBoost_classifier.fit(CatBoost_numeric_data_train, CatBoost_target_data_train)
 
-        # CatBoost_newTestData = scaler.transform(new_numeric_data)
+            # y_pred = naiveB_classifier.predict(naiveB_numeric_data_test)
 
-        # Yeni datanin tahmini yapma
-        CatBoost_prediction = CatBoost_classifier.predict(new_numeric_data)
-        CatBoost_pred_data = convert_df[convert_df['OUTPUT'] == CatBoost_prediction]['SONUC'].iloc[0]
-        if CatBoost_pred_data:
-            return CatBoost_pred_data
-        else:
-            return "NaN"
+            # Selected row prediction matrix
 
-        # Yeni datanin tahmini sonuclandirmak
-        # if CatBoost_prediction[:] == 1:
-        #     return "DIPPER"
-        # elif CatBoost_prediction[:] == 2:
-        #     return "NON-DIPPER"
-        # else:
-        #     return "NaN"
+            select_a_row = [data[i] for i in selected_rows]
+            dff_sel_row = pd.DataFrame(select_a_row)
+            dff_sel_non_nan = dff_sel_row.fillna(0)
+            selected_row_converted_df = dff_sel_non_nan._convert(numeric=True)
+            new_numeric_data = selected_row_converted_df.select_dtypes(include=np.number)
+            if 'OUTPUT' in new_numeric_data.columns:
+                del new_numeric_data['OUTPUT']
+
+            # CatBoost_newTestData = scaler.transform(new_numeric_data)
+
+            # Yeni datanin tahmini yapma
+            CatBoost_prediction = CatBoost_classifier.predict(new_numeric_data)
+            CatBoost_pred_data = convert_df[convert_df['OUTPUT'] == CatBoost_prediction[0]]['SONUC'].iloc[0]
+            if CatBoost_pred_data:
+                return CatBoost_pred_data
+            else:
+                return "NaN"
+
+        return ""
 
 
 # callback for model prediction result

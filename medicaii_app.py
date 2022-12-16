@@ -430,19 +430,36 @@ app.layout = html.Div([
                                     html.Div(id="ml_model_pred_result"),
                                     html.P('Confusion Matrix'),
                                     dcc.Graph(id="ml_model_confusion_matrix"),
+                                    dbc.Row([
+                                        dbc.Col([
+                                            html.P(id="tn", children=["init"]),
+                                        ], style={'background-color': '#0FF5B6'}),
+                                        dbc.Col([
+                                            html.P(id="fp", children=["init"]),
+                                        ], style={'background-color': '#F5200F'})
+                                    ]),
+                                    dbc.Row([
+                                        dbc.Col([
+                                            html.P(id="fn", children=["init"]),
+                                        ], style={'background-color': '#F5200F'}),
+                                        dbc.Col([
+                                            html.P(id="tp", children=["init"]),
+                                        ], style={'background-color': '#0FF5B6'})
+                                    ])
                                 ])
                             ], className='h-100 text-center')
                         ], xs=6),
                         dbc.Col([
                             dbc.Card([
                                 dbc.CardBody([
-                                    html.P('ROC and PR Curves'),
-                                    dcc.Graph(id="roc-curve-model", figure={})
-
+                                    html.P('ROC Eğrisi'),
+                                    dcc.Graph(id="roc-curve-model", figure={}),
+                                    html.P('PR Eğrisi'),
+                                    dcc.Graph(id="pr-curve-model", figure={})
                                 ], className='h-100 text-center')
                             ])
                         ], xs=6)
-                    ])
+                    ]),
                 ])
             ], className='p-2 align-items-stretch'),
         ], id='model_pred')
@@ -812,6 +829,7 @@ def update_dd_value(data):
     df_multi = pd.DataFrame(data)
     return [{"label": i, "value": i} for i in df_multi.columns]
 
+
 # callback for updating modal dropdown
 @app.callback(
     Output("modal_scatter_matrix_dropdown", "options"),
@@ -1049,6 +1067,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
     if ml_selection == 'SVM':
         if 'ml_pred_start' in changed_id:
+
             SVMnumeric_data_train, SVMnumeric_data_test, SVMtarget_data_train, SVMtarget_data_test = train_test_split(
                 numeric_data, targetData, test_size=0.30)
             scaler = StandardScaler()
@@ -1088,6 +1107,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
     elif ml_selection == 'ANN':
         if 'ml_pred_start' in changed_id:
+
             ANN_numeric_data_train, ANN_numeric_data_test, ANN_target_data_train, ANN_target_data_test = train_test_split(
                 numeric_data, targetData, test_size=0.30)
 
@@ -1099,6 +1119,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
 
             mlp = MLPClassifier(hidden_layer_sizes=(50, 50, 50))
             model_ANN = mlp.fit(ANN_numeric_data_train, ANN_target_data_train)
+
 
             pred = model_ANN.predict(ANN_numeric_data_test)
 
@@ -1169,12 +1190,6 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
             knn_numeric_data_test = scaler.transform(d_tree_numeric_data_test)
 
             d_tree_classifier = DecisionTreeClassifier(criterion='entropy', random_state=0)
-            # d_tree_classifier = DecisionTreeClassifier(class_weight=None, criterion='entropy', max_depth=None,
-            #                                            max_features=None, max_leaf_nodes=None,
-            #                                            min_impurity_decrease=0.0, min_impurity_split=None,
-            #                                            min_samples_leaf=1, min_samples_split=2,
-            #                                            min_weight_fraction_leaf=0.0, presort=False,
-            #                                            random_state=0, splitter='best')
 
             d_tree_classifier.fit(d_tree_numeric_data_train, d_tree_target_data_train)
 
@@ -1243,17 +1258,8 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         if 'ml_pred_start' in changed_id:
             CatBoost_numeric_data_train, CatBoost_numeric_data_test, CatBoost_target_data_train, CatBoost_target_data_test = train_test_split(
                 numeric_data, targetData, test_size=0.30)
-            # scaler = StandardScaler()
-            # scaler.fit(CatBoost_numeric_data_train)
 
-            # CatBoost_numeric_data_train = scaler.transform(CatBoost_numeric_data_train)
-            # CatBoost_numeric_data_test = scaler.transform(CatBoost_numeric_data_test)
-
-            CatBoost_classifier = CatBoostClassifier(
-                iterations=5,
-                learning_rate=0.1,
-                # loss_function='CrossEntropy'
-            )
+            CatBoost_classifier = CatBoostClassifier(iterations=5, learning_rate=0.1)
 
             CatBoost_classifier.fit(CatBoost_numeric_data_train, CatBoost_target_data_train)
 
@@ -1274,6 +1280,7 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
             # Yeni datanin tahmini yapma
             CatBoost_prediction = CatBoost_classifier.predict(new_numeric_data)
             CatBoost_pred_data = convert_df[convert_df['OUTPUT'] == CatBoost_prediction[0]]['SONUC'].iloc[0]
+
             if CatBoost_pred_data:
                 return CatBoost_pred_data
             else:
@@ -1288,6 +1295,11 @@ def model_prediction(ml_selection, n_clicks, data, selected_rows):
         Output('ml_model_pred_result', 'children'),
         Output('ml_model_confusion_matrix', 'figure'),
         Output('roc-curve-model', 'figure'),
+        Output('pr-curve-model', 'figure'),
+        Output('fp', 'children'),
+        Output('tp', 'children'),
+        Output('fn', 'children'),
+        Output('tn', 'children'),
     ],
     [
         Input('ml_model_selection', 'value'),
@@ -1338,7 +1350,7 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
                 fixed_rows={'headers': True},
                 style_table={'height': '300px', 'overflowY': 'auto'},
                 style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
-                # export_format='xlsx'
+                export_format='xlsx'
 
             ),
         ]
@@ -1346,21 +1358,47 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
         dff_conf_matrix = pd.DataFrame(confusion_matrix(SVMtarget_data_test, algthPredict))
         fig = px.imshow(dff_conf_matrix, text_auto=True)
 
-        prod_roc = svcclassifier.predict_proba(SVMnumeric_data_test)[:, 1]
-        fpr, tpr, thresholds = metrics.roc_curve(SVMtarget_data_test, prod_roc, pos_label=1)
-        score = metrics.auc(fpr, tpr)
+        svm_tn, svm_fp, svm_fn, svm_tp = confusion_matrix(SVMtarget_data_test, algthPredict).ravel()
 
-        roc_fig = px.area(
-            x=fpr, y=tpr,
-            title=f'ROC Curve (AUC={score:.4f})',
+        svm_falsePositive = "False Positive: ", svm_fp
+        svm_truePositive = "True Positive: ", svm_tp
+        svm_falseNegative = "False Negative: ", svm_fn
+        svm_trueNegative = "True Negative: ", svm_tn
+
+        prod_roc = svcclassifier.predict_proba(SVMnumeric_data_test)[:, 1]
+        svm_fpr, svm_tpr, thresholds = metrics.roc_curve(SVMtarget_data_test, prod_roc, pos_label=2)
+        svm_score = metrics.auc(svm_fpr, svm_tpr)
+
+        svm_roc_fig = px.area(
+            x=svm_fpr, y=svm_tpr,
+            title=f'ROC Curve (AUC={svm_score:.4f})',
             labels=dict(
                 x='False Positive Rate',
                 y='True Positive Rate'))
-        roc_fig.add_shape(
+        svm_roc_fig.add_shape(
             type='line', line=dict(dash='dash'),
             x0=0, x1=1, y0=0, y1=1)
 
-        return [clas_report_table, fig, roc_fig]
+        svm_pr_precision, svm_pr_recall, thresholds = metrics.precision_recall_curve(SVMtarget_data_test,
+                                                                                     prod_roc,
+                                                                                     pos_label=2)
+        svm_pr_score = metrics.auc(svm_fpr, svm_tpr)
+
+        svm_pr_fig = px.area(
+            x=svm_pr_recall, y=svm_pr_precision,
+            title=f'Precision-Recall Curve (AUC={svm_pr_score:.4f})',
+            labels=dict(x='Recall', y='Precision'),
+            width=700, height=500
+        )
+        svm_pr_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=1, y1=0
+        )
+        svm_pr_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        svm_pr_fig.update_xaxes(constrain='domain')
+
+        return [clas_report_table, fig, svm_roc_fig, svm_pr_fig, svm_falsePositive, svm_truePositive, svm_falseNegative,
+                svm_trueNegative]
 
     elif ml_selection == 'ANN' and 'ml_pred_start' in changed_id:
         ANN_numeric_data_train, ANN_numeric_data_test, ANN_target_data_train, ANN_target_data_test = train_test_split(
@@ -1392,7 +1430,7 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
                 fixed_rows={'headers': True},
                 style_table={'height': '300px', 'overflowY': 'auto'},
                 style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
-                # export_format='xlsx'
+                export_format='xlsx'
 
             ),
         ]
@@ -1400,13 +1438,20 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
         ann_dff_conf_matrix = pd.DataFrame(confusion_matrix(ANN_target_data_test, ann_pred))
         ann_fig = px.imshow(ann_dff_conf_matrix, text_auto=True)
 
+        ann_tn, ann_fp, ann_fn, ann_tp = confusion_matrix(ANN_target_data_test, ann_pred).ravel()
+
+        ann_falsePositive = "False Positive: ", ann_fp
+        ann_truePositive = "True Positive: ", ann_tp
+        ann_falseNegative = "False Negative: ", ann_fn
+        ann_trueNegative = "True Negative: ", ann_tn
+
         ann_prod_roc = model_ANN.predict_proba(ANN_numeric_data_test)[:, 1]
-        fpr, tpr, thresholds = metrics.roc_curve(ANN_target_data_test, ann_prod_roc, pos_label=1)
-        score = metrics.auc(fpr, tpr)
+        ann_fpr, ann_tpr, thresholds = metrics.roc_curve(ANN_target_data_test, ann_prod_roc, pos_label=2)
+        ann_score = metrics.auc(ann_fpr, ann_tpr)
 
         ann_roc_fig = px.area(
-            x=fpr, y=tpr,
-            title=f'ROC Curve (AUC={score:.4f})',
+            x=ann_fpr, y=ann_tpr,
+            title=f'ROC Curve (AUC={ann_score:.4f})',
             labels=dict(
                 x='False Positive Rate',
                 y='True Positive Rate'))
@@ -1414,7 +1459,26 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
             type='line', line=dict(dash='dash'),
             x0=0, x1=1, y0=0, y1=1)
 
-        return [ann_clas_report_table, ann_fig, ann_roc_fig]
+        ann_pr_precision, ann_recall, thresholds = metrics.precision_recall_curve(ANN_target_data_test,
+                                                                                  ann_prod_roc,
+                                                                                  pos_label=2)
+        ann_pr_score = metrics.auc(ann_fpr, ann_tpr)
+
+        ann_pr_fig = px.area(
+            x=ann_recall, y=ann_pr_precision,
+            title=f'Precision-Recall Curve (AUC={ann_pr_score:.4f})',
+            labels=dict(x='Recall', y='Precision'),
+            width=700, height=500
+        )
+        ann_pr_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=1, y1=0
+        )
+        ann_pr_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        ann_pr_fig.update_xaxes(constrain='domain')
+
+        return [ann_clas_report_table, ann_fig, ann_roc_fig, ann_pr_fig, ann_falsePositive, ann_truePositive,
+                ann_falseNegative, ann_trueNegative]
 
 
 
@@ -1448,7 +1512,7 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
                 fixed_rows={'headers': True},
                 style_table={'height': '300px', 'overflowY': 'auto'},
                 style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
-                # export_format='xlsx'
+                export_format='xlsx'
 
             ),
         ]
@@ -1457,13 +1521,20 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
         knn_dff_conf_matrix = pd.DataFrame(knn_result)
         knn_fig = px.imshow(knn_dff_conf_matrix, text_auto=True)
 
+        knn_tn, knn_fp, knn_fn, knn_tp = confusion_matrix(knn_target_data_test, knn_algthPredict).ravel()
+
+        knn_falsePositive = "False Positive: ", knn_fp
+        knn_truePositive = "True Positive: ", knn_tp
+        knn_falseNegative = "False Negative: ", knn_fn
+        knn_trueNegative = "True Negative: ", knn_tn
+
         knn_prod_roc = knn_model.predict_proba(knn_numeric_data_test)[:, 1]
-        fpr, tpr, thresholds = metrics.roc_curve(knn_target_data_test, knn_prod_roc, pos_label=1)
-        score = metrics.auc(fpr, tpr)
+        knn_fpr, knn_tpr, thresholds = metrics.roc_curve(knn_target_data_test, knn_prod_roc, pos_label=2)
+        knn_score = metrics.auc(knn_fpr, knn_tpr)
 
         knn_roc_fig = px.area(
-            x=fpr, y=tpr,
-            title=f'ROC Curve (AUC={score:.4f})',
+            x=knn_fpr, y=knn_tpr,
+            title=f'ROC Curve (AUC={knn_score:.4f})',
             labels=dict(
                 x='False Positive Rate',
                 y='True Positive Rate'))
@@ -1471,7 +1542,26 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
             type='line', line=dict(dash='dash'),
             x0=0, x1=1, y0=0, y1=1)
 
-        return [knn_clas_report_table, knn_fig, knn_roc_fig]
+        knn_pr_precision, knn_recall, thresholds = metrics.precision_recall_curve(knn_target_data_test,
+                                                                                  knn_prod_roc,
+                                                                                  pos_label=2)
+        knn_pr_score = metrics.auc(knn_fpr, knn_tpr)
+
+        knn_pr_fig = px.area(
+            x=knn_recall, y=knn_pr_precision,
+            title=f'Precision-Recall Curve (AUC={knn_pr_score:.4f})',
+            labels=dict(x='Recall', y='Precision'),
+            width=700, height=500
+        )
+        knn_pr_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=1, y1=0
+        )
+        knn_pr_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        knn_pr_fig.update_xaxes(constrain='domain')
+
+        return [knn_clas_report_table, knn_fig, knn_roc_fig, knn_pr_fig, knn_falsePositive, knn_truePositive,
+                knn_falseNegative, knn_trueNegative]
 
 
     elif ml_selection == 'Decision Tree' and 'ml_pred_start' in changed_id:
@@ -1510,21 +1600,30 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
                 fixed_rows={'headers': True},
                 style_table={'height': '300px', 'overflowY': 'auto'},
                 style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
-                # export_format='xlsx'
+                export_format='xlsx'
 
             ),
         ]
 
         d_tree_dff_conf_matrix = pd.DataFrame(confusion_matrix(d_tree_target_data_test, d_tree_algthPredict))
+
+        d_tree_tn, d_tree_fp, d_tree_fn, d_tree_tp = confusion_matrix(d_tree_target_data_test,
+                                                                      d_tree_algthPredict).ravel()
+
+        d_tree_falsePositive = "False Positive: ", d_tree_fp
+        d_tree_truePositive = "True Positive: ", d_tree_tp
+        d_tree_falseNegative = "False Negative: ", d_tree_fn
+        d_tree_trueNegative = "True Negative: ", d_tree_tn
+
         d_tree_fig = px.imshow(d_tree_dff_conf_matrix, text_auto=True)
 
         d_tree_prod_roc = d_tree_classifier.predict_proba(knn_numeric_data_test)[:, 1]
-        fpr, tpr, thresholds = metrics.roc_curve(d_tree_target_data_test, d_tree_prod_roc, pos_label=1)
-        score = metrics.auc(fpr, tpr)
+        d_tree_fpr, d_tree_tpr, thresholds = metrics.roc_curve(d_tree_target_data_test, d_tree_prod_roc, pos_label=2)
+        d_tree_score = metrics.auc(d_tree_fpr, d_tree_tpr)
 
         d_tree_roc_fig = px.area(
-            x=fpr, y=tpr,
-            title=f'ROC Curve (AUC={score:.4f})',
+            x=d_tree_fpr, y=d_tree_tpr,
+            title=f'ROC Curve (AUC={d_tree_score:.4f})',
             labels=dict(
                 x='False Positive Rate',
                 y='True Positive Rate'))
@@ -1532,7 +1631,26 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
             type='line', line=dict(dash='dash'),
             x0=0, x1=1, y0=0, y1=1)
 
-        return [d_tree_clas_report_table, d_tree_fig, d_tree_roc_fig]
+        d_tree_pr_precision, d_tree_recall, thresholds = metrics.precision_recall_curve(d_tree_target_data_test,
+                                                                                        d_tree_prod_roc,
+                                                                                        pos_label=2)
+        d_tree_pr_score = metrics.auc(d_tree_fpr, d_tree_tpr)
+
+        d_tree_pr_fig = px.area(
+            x=d_tree_recall, y=d_tree_pr_precision,
+            title=f'Precision-Recall Curve (AUC={d_tree_pr_score:.4f})',
+            labels=dict(x='Recall', y='Precision'),
+            width=700, height=500
+        )
+        d_tree_pr_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=1, y1=0
+        )
+        d_tree_pr_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        d_tree_pr_fig.update_xaxes(constrain='domain')
+
+        return [d_tree_clas_report_table, d_tree_fig, d_tree_roc_fig, d_tree_pr_fig, d_tree_falsePositive,
+                d_tree_truePositive, d_tree_falseNegative, d_tree_trueNegative]
 
 
 
@@ -1566,21 +1684,30 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
                 fixed_rows={'headers': True},
                 style_table={'height': '300px', 'overflowY': 'auto'},
                 style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
-                # export_format='xlsx'
+                export_format='xlsx'
 
             ),
         ]
 
         naiveB_dff_conf_matrix = pd.DataFrame(confusion_matrix(naiveB_target_data_test, naiveB_algthPredict))
+
+        naiveB_tn, naiveB_fp, naiveB_fn, naiveB_tp = confusion_matrix(naiveB_target_data_test,
+                                                                      naiveB_algthPredict).ravel()
+
+        naiveB_falsePositive = "False Positive: ", naiveB_fp
+        naiveB_truePositive = "True Positive: ", naiveB_tp
+        naiveB_falseNegative = "False Negative: ", naiveB_fn
+        naiveB_trueNegative = "True Negative: ", naiveB_tn
+
         naiveB_fig = px.imshow(naiveB_dff_conf_matrix, text_auto=True)
 
         naiveB_prod_roc = naiveB_classifier.predict_proba(naiveB_numeric_data_test)[:, 1]
-        fpr, tpr, thresholds = metrics.roc_curve(naiveB_target_data_test, naiveB_prod_roc, pos_label=1)
-        score = metrics.auc(fpr, tpr)
+        naiveB_fpr, naiveB_tpr, thresholds = metrics.roc_curve(naiveB_target_data_test, naiveB_prod_roc, pos_label=2)
+        naiveB_roc_score = metrics.auc(naiveB_fpr, naiveB_tpr)
 
         naiveB_roc_fig = px.area(
-            x=fpr, y=tpr,
-            title=f'ROC Curve (AUC={score:.4f})',
+            x=naiveB_fpr, y=naiveB_tpr,
+            title=f'ROC Curve (AUC={naiveB_roc_score:.4f})',
             labels=dict(
                 x='False Positive Rate',
                 y='True Positive Rate'))
@@ -1588,7 +1715,26 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
             type='line', line=dict(dash='dash'),
             x0=0, x1=1, y0=0, y1=1)
 
-        return [naiveB_clas_report_table, naiveB_fig, naiveB_roc_fig]
+        naiveB_pr_precision, naiveB_recall, thresholds = metrics.precision_recall_curve(naiveB_target_data_test,
+                                                                                        naiveB_prod_roc,
+                                                                                        pos_label=2)
+        naiveB_pr_score = metrics.auc(naiveB_fpr, naiveB_tpr)
+
+        naiveB_pr_fig = px.area(
+            x=naiveB_recall, y=naiveB_pr_precision,
+            title=f'Precision-Recall Curve (AUC={naiveB_pr_score:.4f})',
+            labels=dict(x='Recall', y='Precision'),
+            width=700, height=500
+        )
+        naiveB_pr_fig.add_shape(
+            type='line', line=dict(dash='dash'),
+            x0=0, x1=1, y0=1, y1=0
+        )
+        naiveB_pr_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        naiveB_pr_fig.update_xaxes(constrain='domain')
+
+        return [naiveB_clas_report_table, naiveB_fig, naiveB_roc_fig, naiveB_pr_fig, naiveB_falsePositive,
+                naiveB_truePositive, naiveB_falseNegative, naiveB_trueNegative]
 
 
     elif ml_selection == 'CatBoost' and 'ml_pred_start' in changed_id:
@@ -1620,21 +1766,30 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
             fixed_rows={'headers': True},
             style_table={'height': '300px', 'overflowY': 'auto'},
             style_cell={'textAlign': 'left', 'minWidth': '90px', 'width': '100px', 'maxWidth': '150px'},
-            # export_format='xlsx'
+            export_format='xlsx'
 
         ),
     ]
 
     CatBoost_dff_conf_matrix = pd.DataFrame(confusion_matrix(CatBoost_target_data_test, CatBoost_prediction))
+
+    catBoost_tn, catBoost_fp, catBoost_fn, catBoost_tp = confusion_matrix(CatBoost_target_data_test,
+                                                                          CatBoost_prediction).ravel()
+
+    catBoost_falsePositive = "False Positive: ", catBoost_fp
+    catBoost_truePositive = "True Positive: ", catBoost_tp
+    catBoost_falseNegative = "False Negative: ", catBoost_fn
+    catBoost_trueNegative = "True Negative: ", catBoost_tn
+
     CatBoost_fig = px.imshow(CatBoost_dff_conf_matrix, text_auto=True)
 
-    naiveB_prod_roc = CatBoost_classifier.predict_proba(CatBoost_numeric_data_test)[:, 1]
-    fpr, tpr, thresholds = metrics.roc_curve(CatBoost_target_data_test, naiveB_prod_roc, pos_label=1)
-    score = metrics.auc(fpr, tpr)
+    CatBoost_prod_roc = CatBoost_classifier.predict_proba(CatBoost_numeric_data_test)[:, 1]
+    fpr, tpr, thresholds = metrics.roc_curve(CatBoost_target_data_test, CatBoost_prod_roc, pos_label=2)
+    catBoost_roc_score = metrics.auc(fpr, tpr)
 
     CatBoost_roc_fig = px.area(
         x=fpr, y=tpr,
-        title=f'ROC Curve (AUC={score:.4f})',
+        title=f'ROC Curve (AUC={catBoost_roc_score:.4f})',
         labels=dict(
             x='False Positive Rate',
             y='True Positive Rate'))
@@ -1642,7 +1797,26 @@ def model_pred_result(ml_selection, n_clicks, data, selected_rows):
         type='line', line=dict(dash='dash'),
         x0=0, x1=1, y0=0, y1=1)
 
-    return [CatBoost_clas_report_table, CatBoost_fig, CatBoost_roc_fig]
+    CatBoot_pr_precision, CatBoot_recall, thresholds = metrics.precision_recall_curve(CatBoost_target_data_test,
+                                                                                      CatBoost_prod_roc,
+                                                                                      pos_label=2)
+    catBoost_pr_score = metrics.auc(fpr, tpr)
+    CatBoost_pr_fig = px.area(
+        x=CatBoot_recall, y=CatBoot_pr_precision,
+        title=f'Precision-Recall Curve (AUC={catBoost_pr_score:.4f})',
+        labels=dict(x='Recall', y='Precision'),
+        width=700, height=500
+    )
+    CatBoost_pr_fig.add_shape(
+        type='line', line=dict(dash='dash'),
+        x0=0, x1=1, y0=1, y1=0
+    )
+    CatBoost_pr_fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    CatBoost_pr_fig.update_xaxes(constrain='domain')
+
+    return [CatBoost_clas_report_table, CatBoost_fig, CatBoost_roc_fig, CatBoost_pr_fig, catBoost_falsePositive,
+            catBoost_truePositive,
+            catBoost_falseNegative, catBoost_trueNegative]
 
 
 if __name__ == '__main__':

@@ -63,7 +63,7 @@ auth = dash_auth.BasicAuth(
 
 # connection string for live database on heroku
 app.server.config[
-    "SQLALCHEMY_DATABASE_URI"] = "postgresql://evtexvmmrvqyrw:8a14fa5b8009cc2125cc8ea65101556eb5cb6e3379a79cb6e281f183f0a88e49@ec2-34-231-42-166.compute-1.amazonaws.com:5432/d3k83j4dfdj09o"
+    "SQLALCHEMY_DATABASE_URI"] = "postgresql://"
 db = SQLAlchemy(app.server)
 
 # ---------------------------------------------------------------------------------

@@ -21,8 +21,8 @@ server = Flask(__name__)
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets, server=server, suppress_callback_exceptions=True)
 app.server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 
-# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:amir02@localhost/medicAI_app_test"
-app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://fgwbratbblzjzt:d74375080115398d280f39aa59178a7a28725864cfae35a9f0dfd52019e49e50@ec2-44-205-63-142.compute-1.amazonaws.com:5432/ddcvvddf5lh5v2"
+# app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://"
+app.server.config["SQLALCHEMY_DATABASE_URI"] = "postgresql:"
 
 db = SQLAlchemy(app.server)
 
